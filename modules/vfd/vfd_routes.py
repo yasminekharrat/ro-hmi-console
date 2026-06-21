@@ -769,7 +769,7 @@ def api_connect():
             })
 
 
-@vfd_blueprint.route('/api/update-settings', methods=['POST'])
+@vfd_blueprint.route('/api/vfd/update-settings', methods=['POST'])
 def api_update_settings():
     data = request.get_json(silent=True) or request.values
     try:
