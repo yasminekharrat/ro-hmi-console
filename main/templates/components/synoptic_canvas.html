@@ -1,0 +1,623 @@
+<!--
+  ════════════════════════════════════════════════════════════════
+  synoptic_canvas.html  —  Thermeco Industrie SCADA/HMI
+
+  Rebuilt as a true SVG technical drawing (v1's exact visual style:
+  tank shells, layered cylinder caps, membrane vessels with visible
+  elements, circular fan-bladed HP pump, butterfly valves, zone
+  separators, pipe network with flow arrows) using v1's coordinate
+  layout (1020×510 viewBox) as ground truth.
+
+  Two layers, perfectly aligned:
+    1. <svg id="pipe-svg">  — all static artwork: pipes, tanks,
+       gauges, filters, membranes, valves, zone lines. Pure drawing,
+       no dynamic content, mirrors v1 1:1.
+    2. HTML overlay (.syn-block, position:absolute, same coordinate
+       space as the SVG) — every id/class synoptic.js reads or
+       writes (tank-raw-fill, dp-bar-sand, dot-hp-pump, syn-val-*,
+       etc.) plus the click targets (openPanel / showView /
+       backwash modal). This is necessary because synoptic.js sets
+       `el.style.height = 'X%'` / `el.style.width = 'X%'`, which
+       behaves correctly on HTML block elements but not reliably on
+       raw SVG <rect> percentage sizing — so dynamic fills/bars stay
+       as HTML divs stacked exactly on top of the SVG artwork.
+
+  Wiring preserved (unchanged from synoptic.js):
+    - openPanel('compId', 'Title')   → opens #detail-panel
+    - showView('vfd')                → HP pump click → VFD tab directly
+    - #backwash-modal .open          → sand filter backwash button
+    - every #id inside updateSynoptic() exists exactly once below.
+
+  NOTE ON CSS: the old .loc-* pixel rules in synoptic.css positioned
+  components on v2's looser grid. This file uses v1's coordinates
+  instead (see comment block at file end for the small CSS update
+  needed — the .loc-* selectors can be deleted/ignored since every
+  block below carries its own inline position matching the SVG).
+  ════════════════════════════════════════════════════════════════
+-->
+
+<main id="view-synoptic" class="w-full flex-grow flex flex-col overflow-hidden src-view-component">
+
+    <div id="synoptic-canvas" class="flex-grow flex flex-col" style="position:relative; background:#D2D8DA;">
+        <div id="view-overview" class="flex-grow relative overflow-hidden select-none" style="min-height:520px;">
+
+            <!-- ════════════════════════════════════════════════════
+                 LAYER 1 — STATIC SVG ARTWORK (pipes + equipment shapes)
+                 viewBox 0 0 1020 510, matches v1 exactly
+                 ════════════════════════════════════════════════════ -->
+            <svg id="pipe-svg" viewBox="0 0 1020 510" preserveAspectRatio="xMidYMid meet"
+                 style="position:absolute; top:0; left:0; width:100%; height:100%;">
+
+                <defs>
+                    <style>
+                        .syn-box      { fill:#C4CDD0; stroke:#7F8C8D; stroke-width:0.8; }
+                        .syn-box-dark { fill:#B0BBC0; stroke:#5A6A70; stroke-width:0.8; }
+                        .syn-label    { font-family:'Segoe UI',Arial,sans-serif; font-size:7.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; fill:#334155; }
+                        .syn-id       { font-family:'Segoe UI',Arial,sans-serif; font-size:6px; fill:#4A5568; font-weight:600; letter-spacing:0.05em; }
+                        .syn-zone-label { font-family:'Segoe UI',Arial,sans-serif; font-size:7px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; fill:#8A9A9F; }
+                        .zone-sep     { stroke:#A8B4B8; stroke-width:0.5; stroke-dasharray:4 4; opacity:0.5; }
+                        .pump-spin    { animation: spin-pump 2s linear infinite; transform-origin:center; }
+                        @keyframes spin-pump { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                    </style>
+                </defs>
+
+                <!-- Zone boundary separators -->
+                <line x1="215" y1="10" x2="215" y2="500" class="zone-sep"/>
+                <line x1="410" y1="10" x2="410" y2="500" class="zone-sep"/>
+                <line x1="620" y1="10" x2="620" y2="500" class="zone-sep"/>
+                <line x1="820" y1="10" x2="820" y2="500" class="zone-sep"/>
+
+                <text x="112" y="18" class="syn-zone-label" text-anchor="middle">Prétraitement</text>
+                <text x="312" y="18" class="syn-zone-label" text-anchor="middle">Filtration</text>
+                <text x="515" y="18" class="syn-zone-label" text-anchor="middle">Haute Pression</text>
+                <text x="720" y="18" class="syn-zone-label" text-anchor="middle">Membranes OI</text>
+                <text x="920" y="18" class="syn-zone-label" text-anchor="middle">Perméat / Produit</text>
+
+                <!-- ═══ PIPE NETWORK ═══ -->
+                <line x1="94" y1="230" x2="136" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+                <line x1="136" y1="185" x2="136" y2="275" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+                <line x1="136" y1="230" x2="230" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+
+                <line x1="264" y1="160" x2="300" y2="160" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="300" y1="160" x2="300" y2="230" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="264" y1="295" x2="300" y2="295" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="300" y1="295" x2="300" y2="230" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="300" y1="230" x2="420" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+
+                <line x1="420" y1="230" x2="455" y2="230" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="505" y1="230" x2="535" y2="230" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="535" y1="195" x2="535" y2="265" stroke="#5A6A70" stroke-width="2" stroke-linecap="round"/>
+                <line x1="535" y1="230" x2="590" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+
+                <line x1="590" y1="230" x2="615" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+                <line x1="665" y1="230" x2="700" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+                <line x1="700" y1="195" x2="700" y2="230" stroke="#5A6A70" stroke-width="2" stroke-linecap="round"/>
+                <line x1="700" y1="230" x2="740" y2="230" stroke="#5A6A70" stroke-width="3.5" stroke-linecap="round"/>
+
+                <line x1="740" y1="155" x2="740" y2="305" stroke="#5A6A70" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="740" y1="155" x2="765" y2="155" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+                <line x1="740" y1="305" x2="765" y2="305" stroke="#5A6A70" stroke-width="3" stroke-linecap="round"/>
+
+                <line x1="865" y1="155" x2="900" y2="155" stroke="#3B7A8C" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="900" y1="155" x2="900" y2="240" stroke="#3B7A8C" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="865" y1="305" x2="900" y2="305" stroke="#3B7A8C" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="900" y1="305" x2="900" y2="260" stroke="#3B7A8C" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="900" y1="250" x2="930" y2="250" stroke="#3B7A8C" stroke-width="3" stroke-linecap="round"/>
+
+                <line x1="865" y1="175" x2="900" y2="175" stroke="#8C5A3B" stroke-width="2" stroke-linecap="round"/>
+                <line x1="900" y1="175" x2="900" y2="390" stroke="#8C5A3B" stroke-width="2" stroke-linecap="round"/>
+                <line x1="900" y1="390" x2="800" y2="390" stroke="#8C5A3B" stroke-width="2" stroke-linecap="round"/>
+                <line x1="865" y1="285" x2="890" y2="285" stroke="#8C5A3B" stroke-width="2" stroke-linecap="round"/>
+                <line x1="890" y1="285" x2="890" y2="390" stroke="#8C5A3B" stroke-width="2" stroke-linecap="round"/>
+                <line x1="820" y1="375" x2="820" y2="405" stroke="#8C5A3B" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="800" y1="390" x2="40" y2="390" stroke="#8C5A3B" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="6 3"/>
+
+                <line x1="40" y1="390" x2="40" y2="445" stroke="#8C5A3B" stroke-width="1.5"/>
+                <line x1="136" y1="275" x2="136" y2="390" stroke="#5A6A70" stroke-width="2" stroke-linecap="round"/>
+                <line x1="100" y1="390" x2="136" y2="390" stroke="#5A6A70" stroke-width="2" stroke-linecap="round"/>
+
+                <polygon points="222,227 214,223 214,237" fill="#5A6A70" opacity="0.5"/>
+                <polygon points="392,227 384,223 384,237" fill="#5A6A70" opacity="0.5"/>
+                <polygon points="582,227 574,223 574,237" fill="#5A6A70" opacity="0.5"/>
+                <polygon points="732,227 724,223 724,237" fill="#5A6A70" opacity="0.5"/>
+                <polygon points="922,247 918,240 918,254" fill="#3B7A8C" opacity="0.5"/>
+
+                <!-- Pipe legend -->
+                <line x1="630" y1="490" x2="660" y2="490" stroke="#5A6A70" stroke-width="3"/>
+                <text x="663" y="493" class="syn-id">Alimentation</text>
+                <line x1="720" y1="490" x2="750" y2="490" stroke="#3B7A8C" stroke-width="2.5"/>
+                <text x="753" y="493" class="syn-id">Perméat</text>
+                <line x1="800" y1="490" x2="830" y2="490" stroke="#8C5A3B" stroke-width="2" stroke-dasharray="4 2"/>
+                <text x="833" y="493" class="syn-id">Concentrat</text>
+
+                <!-- ═══ ZONE 1: PRÉ-TRAITEMENT ═══ -->
+
+                <!-- Tank T-01 shell (fill handled by HTML overlay) -->
+                <g transform="translate(18,140)">
+                    <rect x="0" y="0" width="52" height="80" rx="2" class="syn-box"/>
+                    <text x="26" y="-6" class="syn-id" text-anchor="middle">T-01</text>
+                    <text x="26" y="88" class="syn-label" text-anchor="middle" font-size="6.5px">Cuve Brute</text>
+                    <rect x="52" y="36" width="8" height="5" fill="#5A6A70"/>
+                </g>
+
+                <!-- Feed pump P-00 -->
+                <g transform="translate(118,185)">
+                    <text x="18" y="-6" class="syn-id" text-anchor="middle">P-00</text>
+                    <circle cx="18" cy="22" r="18" class="syn-box" stroke-width="1"/>
+                    <polygon points="10,14 10,30 26,22" fill="#7F8C8D" opacity="0.8"/>
+                    <line class="pump-spin" x1="18" y1="14" x2="18" y2="30" stroke="#5A6A70" stroke-width="1.5" stroke-linecap="round" style="transform-origin:18px 22px"/>
+                    <text x="18" y="50" class="syn-label" text-anchor="middle" font-size="6px">Pompe</text>
+                    <text x="18" y="58" class="syn-label" text-anchor="middle" font-size="6px">Alimentation</text>
+                </g>
+
+                <!-- Gauge PT-01 -->
+                <g transform="translate(120,140)">
+                    <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-01</text>
+                    <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+                    <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">P INLET</text>
+                </g>
+
+                <!-- Flow FT-01 -->
+                <g transform="translate(120,258)">
+                    <text x="18" y="-5" class="syn-id" text-anchor="middle">FT-01</text>
+                    <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+                    <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">Q INLET</text>
+                </g>
+
+                <!-- Sand filter FS-1 -->
+                <g transform="translate(230,98)">
+                    <text x="17" y="-5" class="syn-id" text-anchor="middle">FS-1</text>
+                    <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <rect x="0" y="8" width="34" height="58" rx="0" class="syn-box"/>
+                    <line x1="4" y1="38" x2="30" y2="38" stroke="#96A0A5" stroke-width="0.5"/>
+                    <line x1="4" y1="50" x2="30" y2="50" stroke="#96A0A5" stroke-width="0.5"/>
+                    <rect x="4" y="66" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <text x="17" y="80" class="syn-label" text-anchor="middle" font-size="6px">Filtre</text>
+                    <text x="17" y="88" class="syn-label" text-anchor="middle" font-size="6px">Sable 1</text>
+                    <rect x="34" y="29" width="10" height="4" fill="#5A6A70"/>
+                </g>
+
+                <!-- Sand filter FS-2 -->
+                <g transform="translate(230,232)">
+                    <text x="17" y="-5" class="syn-id" text-anchor="middle">FS-2</text>
+                    <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <rect x="0" y="8" width="34" height="58" rx="0" class="syn-box"/>
+                    <line x1="4" y1="38" x2="30" y2="38" stroke="#96A0A5" stroke-width="0.5"/>
+                    <line x1="4" y1="50" x2="30" y2="50" stroke="#96A0A5" stroke-width="0.5"/>
+                    <rect x="4" y="66" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <text x="17" y="80" class="syn-label" text-anchor="middle" font-size="6px">Filtre</text>
+                    <text x="17" y="88" class="syn-label" text-anchor="middle" font-size="6px">Sable 2</text>
+                    <rect x="34" y="29" width="10" height="4" fill="#5A6A70"/>
+                </g>
+
+                <!-- ═══ ZONE 2: FILTRATION CARTOUCHES ═══ -->
+
+                <g transform="translate(430,178)">
+                    <text x="17" y="-5" class="syn-id" text-anchor="middle">F-5U</text>
+                    <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <rect x="0" y="8" width="34" height="48" rx="0" class="syn-box"/>
+                    <rect x="4" y="56" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <text x="17" y="74" class="syn-label" text-anchor="middle" font-size="6px">F 5 μm</text>
+                    <rect x="34" y="24" width="10" height="4" fill="#5A6A70"/>
+                </g>
+
+                <g transform="translate(504,178)">
+                    <text x="17" y="-5" class="syn-id" text-anchor="middle">F-1U</text>
+                    <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <rect x="0" y="8" width="34" height="48" rx="0" class="syn-box"/>
+                    <rect x="4" y="56" width="26" height="8" rx="2" class="syn-box-dark"/>
+                    <text x="17" y="74" class="syn-label" text-anchor="middle" font-size="6px">F 1 μm</text>
+                    <rect x="34" y="24" width="10" height="4" fill="#5A6A70"/>
+                </g>
+
+                <g transform="translate(430,130)">
+                    <text x="19" y="-5" class="syn-id" text-anchor="middle">PT-02</text>
+                    <rect x="0" y="0" width="38" height="32" rx="2" class="syn-box"/>
+                    <text x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px">P BAS</text>
+                    <line x1="19" y1="32" x2="19" y2="48" stroke="#7F8C8D" stroke-width="0.8" stroke-dasharray="2 2"/>
+                </g>
+
+                <!-- ═══ ZONE 3: HAUTE PRESSION ═══ -->
+
+                <g transform="translate(518,162)">
+                    <text x="19" y="-5" class="syn-id" text-anchor="middle">PT-03</text>
+                    <rect x="0" y="0" width="38" height="32" rx="2" class="syn-box"/>
+                    <text x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px">P PRÉ-HP</text>
+                    <line x1="19" y1="32" x2="19" y2="45" stroke="#7F8C8D" stroke-width="0.8" stroke-dasharray="2 2"/>
+                </g>
+
+                <!-- HP Pump P-01 -->
+                <g transform="translate(590,196)">
+                    <circle cx="37" cy="34" r="34" id="hp-pump-outer-ring" fill="#1E2830" stroke="#2E5070" stroke-width="1.5"/>
+                    <circle cx="37" cy="34" r="26" fill="#2A3540" stroke="#3A6080" stroke-width="1"/>
+                    <g class="pump-spin" id="hp-pump-blades" style="transform-origin:37px 34px">
+                        <line x1="37" y1="14" x2="37" y2="54" stroke="#4A8AAA" stroke-width="2.5" stroke-linecap="round"/>
+                        <line x1="17" y1="34" x2="57" y2="34" stroke="#4A8AAA" stroke-width="2.5" stroke-linecap="round"/>
+                        <line x1="23" y1="20" x2="51" y2="48" stroke="#4A8AAA" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+                        <line x1="51" y1="20" x2="23" y2="48" stroke="#4A8AAA" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+                    </g>
+                    <circle cx="37" cy="34" r="5" fill="#3A6080"/>
+                    <text x="37" y="-10" class="syn-id" text-anchor="middle" fill="#5A9ABF" font-size="7px">P-01 VFD</text>
+                    <text x="37" y="80" class="syn-label" text-anchor="middle" fill="#4A8AAA" font-size="6.5px">POMPE HP</text>
+                    <text x="37" y="90" class="syn-id" text-anchor="middle" fill="#3A6A88">→ TAB VFD</text>
+                </g>
+
+                <!-- HP discharge gauge PT-04 -->
+                <g transform="translate(682,162)">
+                    <text x="19" y="-5" class="syn-id" text-anchor="middle">PT-04</text>
+                    <rect id="pt04-box" x="0" y="0" width="38" height="32" rx="2" class="syn-box" stroke-width="1"/>
+                    <text id="pt04-label" x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px">P HP</text>
+                    <line x1="19" y1="32" x2="19" y2="45" stroke="#7F8C8D" stroke-width="0.8" stroke-dasharray="2 2"/>
+                </g>
+
+                <!-- ═══ ZONE 4: MEMBRANES OI ═══ -->
+
+                <g transform="translate(762,110)">
+                    <text x="52" y="-5" class="syn-id" text-anchor="middle">RO-1</text>
+                    <rect x="0" y="12" width="100" height="36" rx="4" class="syn-box"/>
+                    <rect x="0" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+                    <rect x="86" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+                    <rect x="16" y="16" width="22" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <rect x="40" y="16" width="22" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <rect x="64" y="16" width="20" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <line x1="0" y1="30" x2="100" y2="30" stroke="#5A7A8A" stroke-width="1" stroke-dasharray="3 2"/>
+                    <circle cx="50" cy="30" r="8" fill="#A0AEBB" stroke="#7A8A90" stroke-width="0.5"/>
+                    <text x="50" y="32" class="syn-label" text-anchor="middle" font-size="5px">RO</text>
+                    <rect x="100" y="18" width="8" height="4" fill="#3B7A8C"/>
+                    <rect x="100" y="35" width="8" height="3" fill="#8C5A3B"/>
+                    <text x="108" y="23" class="syn-id" fill="#3B7A8C" font-size="5.5px">Perméat</text>
+                    <text x="108" y="39" class="syn-id" fill="#8C5A3B" font-size="5.5px">Concentrat</text>
+                    <text x="52" y="66" class="syn-label" text-anchor="middle" font-size="6px">Membrane RO 1</text>
+                </g>
+
+                <g transform="translate(762,260)">
+                    <text x="52" y="-5" class="syn-id" text-anchor="middle">RO-2</text>
+                    <rect x="0" y="12" width="100" height="36" rx="4" class="syn-box"/>
+                    <rect x="0" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+                    <rect x="86" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+                    <rect x="16" y="16" width="22" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <rect x="40" y="16" width="22" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <rect x="64" y="16" width="20" height="28" rx="1" fill="#B0BBBF" stroke="#8A9A9F" stroke-width="0.5"/>
+                    <line x1="0" y1="30" x2="100" y2="30" stroke="#5A7A8A" stroke-width="1" stroke-dasharray="3 2"/>
+                    <circle cx="50" cy="30" r="8" fill="#A0AEBB" stroke="#7A8A90" stroke-width="0.5"/>
+                    <text x="50" y="32" class="syn-label" text-anchor="middle" font-size="5px">RO</text>
+                    <rect x="100" y="18" width="8" height="4" fill="#3B7A8C"/>
+                    <rect x="100" y="35" width="8" height="3" fill="#8C5A3B"/>
+                    <text x="108" y="23" class="syn-id" fill="#3B7A8C" font-size="5.5px">Perméat</text>
+                    <text x="108" y="39" class="syn-id" fill="#8C5A3B" font-size="5.5px">Concentrat</text>
+                    <text x="52" y="66" class="syn-label" text-anchor="middle" font-size="6px">Membrane RO 2</text>
+                </g>
+
+                <g transform="translate(802,358)">
+                    <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-Rej</text>
+                    <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+                    <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">P CONC.</text>
+                </g>
+
+                <!-- ═══ ZONE 5: PERMÉAT / PRODUIT ═══ -->
+
+                <g transform="translate(928,170)">
+                    <rect x="0" y="0" width="52" height="100" rx="2" class="syn-box"/>
+                    <text x="26" y="-6" class="syn-id" text-anchor="middle">T-02</text>
+                    <text x="26" y="108" class="syn-label" text-anchor="middle" font-size="6.5px">Cuve Perméat</text>
+                    <rect x="-8" y="76" width="8" height="4" fill="#3B7A8C"/>
+                </g>
+
+                <g transform="translate(930,310)">
+                    <text x="22" y="-5" class="syn-id" text-anchor="middle">CT-01</text>
+                    <rect x="0" y="0" width="44" height="36" rx="2" class="syn-box"/>
+                    <text x="22" y="11" class="syn-label" text-anchor="middle" font-size="6px">CONDUCTIV.</text>
+                </g>
+
+                <g transform="translate(930,375)">
+                    <text x="22" y="-5" class="syn-id" text-anchor="middle">FT-02</text>
+                    <rect x="0" y="0" width="44" height="36" rx="2" class="syn-box"/>
+                    <text x="22" y="11" class="syn-label" text-anchor="middle" font-size="6px">Q PERMÉAT</text>
+                </g>
+
+                <!-- ═══ ACTUATORS / BOTTOM ROW ═══ -->
+
+                <g transform="translate(22,432)">
+                    <text x="18" y="-5" class="syn-id" text-anchor="middle">EVF</text>
+                    <polygon x-id="valve-evf-poly" points="18,0 36,18 18,36 0,18" fill="#C4CDD0" stroke="#7F8C8D" stroke-width="0.8"/>
+                    <line x1="18" y1="0" x2="18" y2="36" stroke="#5A6A70" stroke-width="1.5"/>
+                    <text x="18" y="46" class="syn-label" text-anchor="middle" font-size="5.5px">V. Chasse</text>
+                </g>
+
+                <g transform="translate(82,432)">
+                    <text x="18" y="-5" class="syn-id" text-anchor="middle">EVE</text>
+                    <polygon id="valve-eve-poly" points="18,0 36,18 18,36 0,18" fill="#475569" stroke="#334155" stroke-width="0.8"/>
+                    <line x1="18" y1="0" x2="18" y2="36" stroke="#C4CDD0" stroke-width="1.5"/>
+                    <text x="18" y="46" class="syn-label" text-anchor="middle" font-size="5.5px">V. Eau Brute</text>
+                </g>
+
+                <!-- START button -->
+                <g transform="translate(200,430)">
+                    <rect id="start-btn-box" x="0" y="0" width="70" height="36" rx="2" fill="#2E4057" stroke="#3A6080" stroke-width="1.2"/>
+                    <text x="35" y="15" class="syn-label" text-anchor="middle" fill="#7AB0D0" font-size="7px">■ EN MARCHE</text>
+                </g>
+
+                <!-- ALARM button -->
+                <g transform="translate(290,430)">
+                    <rect id="alarm-btn-box" x="0" y="0" width="70" height="36" rx="2" fill="#7F8C8D" stroke="#5A6A70" stroke-width="1"/>
+                    <text x="35" y="15" class="syn-label" text-anchor="middle" fill="#fff" font-size="7px">⚠ ALARME</text>
+                </g>
+
+                <!-- Recovery ratio -->
+                <g transform="translate(415,430)">
+                    <rect x="0" y="0" width="90" height="36" rx="2" fill="#1E2830" stroke="#2E4050" stroke-width="0.8"/>
+                    <text x="45" y="11" class="syn-label" text-anchor="middle" fill="#5A7A8A" font-size="6px">TAUX RÉCUPÉRATION</text>
+                </g>
+
+                <!-- Mode indicator box -->
+                <g transform="translate(520,430)">
+                    <rect x="0" y="0" width="80" height="36" rx="2" class="syn-box"/>
+                    <text x="40" y="11" class="syn-label" text-anchor="middle" font-size="6px">MODE</text>
+                </g>
+
+                <!-- Station status banner -->
+                <g transform="translate(430,28)">
+                    <rect id="station-banner-box" x="0" y="0" width="160" height="24" rx="2" fill="#2E4057" stroke="#3A6080" stroke-width="1"/>
+                    <text id="station-banner-text" x="80" y="16" class="syn-label" text-anchor="middle" fill="#7AB0D0" font-size="8px" letter-spacing="0.12em">OI EN PRODUCTION</text>
+                </g>
+
+            </svg>
+
+            <!-- ════════════════════════════════════════════════════
+                 LAYER 2 — HTML OVERLAY (dynamic values, fills, dots,
+                 click targets). Positioned in the same 1020×510
+                 coordinate space using percentage offsets so it
+                 scales with the SVG's preserveAspectRatio.
+                 ════════════════════════════════════════════════════ -->
+            <div class="syn-zone" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+
+                <!-- Tank T-01 fill + click target + level% -->
+                <div class="syn-block" style="pointer-events:auto; top:13.7%; left:1.8%; width:5.1%; height:15.7%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('tanks','Réservoirs')">
+                    <div style="position:relative; width:100%; height:100%; overflow:hidden;">
+                        <div id="tank-raw-fill" class="tank-fill" style="position:absolute; bottom:0; left:0; right:0; height:50%; background:#9EADB3; opacity:0.85;"></div>
+                        <div id="tank-raw-pct" class="tank-pct" style="position:absolute; width:100%; text-align:center; bottom:35%; font-family:'Roboto Mono',monospace; font-size:9px; font-weight:700; color:#1a1a1a;">50%</div>
+                    </div>
+                </div>
+                <div class="syn-block" style="pointer-events:auto; top:30.5%; left:1.8%; width:5.1%; height:2%; display:flex; align-items:center; justify-content:center; gap:3px;">
+                    <span id="dot-tank-low" class="syn-status-dot on" style="width:6px;height:6px;border-radius:50%;background:#475569;display:inline-block;"></span>
+                </div>
+
+                <!-- Gauge PT-01 value -->
+                <div class="syn-block" style="pointer-events:auto; top:31.5%; left:11.8%; width:3.5%; height:4%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span class="syn-val" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+
+                <!-- Flow FT-01 value -->
+                <div class="syn-block" style="pointer-events:auto; top:58.4%; left:11.8%; width:3.5%; height:4%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-flow-inlet-display" class="syn-val" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+
+                <!-- Feed pump click target (box-feed-pump carries the active-running/alarm state classes) -->
+                <div id="box-feed-pump" class="syn-block" style="pointer-events:auto; top:36.3%; left:11.6%; width:7%; height:14.7%; cursor:pointer; border-radius:50%;"
+                     onclick="SynopticHMI.openPanel('feed_pump','Pompe Alimentation')">
+                </div>
+                <div class="syn-block" style="pointer-events:auto; top:38%; left:13.4%; width:1%; height:1%;">
+                    <span id="dot-feed-pump" class="syn-status-dot off" style="width:6px;height:6px;border-radius:50%;background:#fff;border:1px solid #7F8C8D;display:inline-block;"></span>
+                </div>
+
+                <!-- Sand filter FS-1 — values, ΔP bar, status dot, backwash button -->
+                <div class="syn-block" style="pointer-events:auto; top:19.2%; left:22.5%; width:3.4%; height:21%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('sand_filter','Filtre à Sable')">
+                </div>
+                <div style="position:absolute; top:35.3%; left:22.3%; width:3.8%; pointer-events:none; text-align:center;">
+                    <span id="syn-val-p-in-filter" style="font-family:'Roboto Mono',monospace; font-size:7px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+                <div style="position:absolute; top:55%; left:22.3%; width:3.8%; pointer-events:none; display:flex; align-items:center; justify-content:center; gap:2px;">
+                    <span id="dot-sand-bw" class="syn-status-dot on" style="width:5px;height:5px;border-radius:50%;background:#475569;display:inline-block;"></span>
+                    <span id="syn-val-dp-sand" style="font-family:'Roboto Mono',monospace; font-size:6.5px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+                <div class="dp-bar-bg" style="position:absolute; top:51%; left:22.3%; width:3.6%; height:1%; background:#fff; border:1px solid #7F8C8D; pointer-events:none;">
+                    <div id="dp-bar-sand" class="dp-bar-fill" style="height:100%; width:0%; background:#475569;"></div>
+                </div>
+                <!-- box-sand-filter: invisible state holder, classList toggled by JS (backwash/alarm visual handled via this wrapper) -->
+                <div id="box-sand-filter" style="position:absolute; top:19.2%; left:22.5%; width:3.4%; height:21%; pointer-events:none; border-radius:2px;"></div>
+                <button class="wincc-btn" style="position:absolute; top:40.5%; left:22.3%; width:3.8%; font-size:5.5px; padding:1px 2px; pointer-events:auto; z-index:5;"
+                        onclick="event.stopPropagation(); document.getElementById('backwash-modal').classList.add('open')">
+                    Contre-Lav.
+                </button>
+                <div style="position:absolute; top:55%; left:22.3%; width:3.8%; pointer-events:none;">
+                    <span id="syn-val-p-out-filter" style="display:none;">---</span>
+                </div>
+
+                <!-- Sand filter FS-2 click target -->
+                <div class="syn-block" style="pointer-events:auto; top:45.5%; left:22.5%; width:3.4%; height:21%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('sand_filter','Filtre à Sable')">
+                </div>
+
+                <!-- Gauge PT-02 (low pressure post-cartridge) -->
+                <div class="syn-block" style="pointer-events:auto; top:25.5%; left:42.2%; width:3.7%; height:6.3%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-p-low" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a; position:absolute; bottom:18%; left:0; right:0;">---</span>
+                </div>
+
+                <!-- Cartridge filter F-5U -->
+                <div class="syn-block" style="pointer-events:auto; top:34.9%; left:42.2%; width:3.4%; height:11%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('cartridge_filters','Filtres Cartouches')">
+                </div>
+                <div id="box-filter-5u" style="position:absolute; top:34.9%; left:42.2%; width:3.4%; height:11%; pointer-events:none; border-radius:2px;"></div>
+                <div style="position:absolute; top:43%; left:42.1%; width:3.6%; pointer-events:none; text-align:center;">
+                    <span id="syn-val-p-out-5u" style="font-family:'Roboto Mono',monospace; font-size:6.5px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+                <div class="dp-bar-bg" style="position:absolute; top:46.5%; left:42.1%; width:3.4%; height:1%; background:#fff; border:1px solid #7F8C8D; pointer-events:none;">
+                    <div id="dp-bar-5u" class="dp-bar-fill" style="height:100%; width:0%; background:#475569;"></div>
+                </div>
+                <div style="position:absolute; top:48.3%; left:42.1%; width:3.6%; pointer-events:none; display:flex; align-items:center; justify-content:center; gap:2px;">
+                    <span id="dot-filter-5u" class="syn-status-dot on" style="width:5px;height:5px;border-radius:50%;background:#475569;display:inline-block;"></span>
+                    <span id="syn-val-dp-5u" style="font-family:'Roboto Mono',monospace; font-size:6px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+
+                <!-- Cartridge filter F-1U -->
+                <div class="syn-block" style="pointer-events:auto; top:34.9%; left:49.4%; width:3.4%; height:11%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('cartridge_filters','Filtres Cartouches')">
+                </div>
+                <div id="box-filter-1u" style="position:absolute; top:34.9%; left:49.4%; width:3.4%; height:11%; pointer-events:none; border-radius:2px;"></div>
+                <div style="position:absolute; top:43%; left:49.3%; width:3.6%; pointer-events:none; text-align:center;">
+                    <span id="syn-val-p-out-1u" style="font-family:'Roboto Mono',monospace; font-size:6.5px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+                <div class="dp-bar-bg" style="position:absolute; top:46.5%; left:49.3%; width:3.4%; height:1%; background:#fff; border:1px solid #7F8C8D; pointer-events:none;">
+                    <div id="dp-bar-1u" class="dp-bar-fill" style="height:100%; width:0%; background:#475569;"></div>
+                </div>
+                <div style="position:absolute; top:48.3%; left:49.3%; width:3.6%; pointer-events:none; display:flex; align-items:center; justify-content:center; gap:2px;">
+                    <span id="dot-filter-1u" class="syn-status-dot on" style="width:5px;height:5px;border-radius:50%;background:#475569;display:inline-block;"></span>
+                    <span id="syn-val-dp-1u" style="font-family:'Roboto Mono',monospace; font-size:6px; font-weight:700; color:#1a1a1a;">---</span>
+                </div>
+
+                <!-- Gauge PT-03 (pre-HP) -->
+                <div class="syn-block" style="pointer-events:auto; top:31.8%; left:50.8%; width:3.7%; height:6.3%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                </div>
+
+                <!-- HP PUMP — single click → straight to VFD tab -->
+                <div id="interactive-hp-pump-wrapper" class="syn-block" style="pointer-events:auto; top:38.4%; left:57.8%; width:7.3%; height:13.3%; cursor:pointer; z-index:50;"
+                     onclick="SynopticHMI.showView('vfd')">
+                </div>
+                <div id="box-hp-pump" style="position:absolute; top:38.4%; left:57.8%; width:7.3%; height:13.3%; pointer-events:none; border-radius:50%;"></div>
+                <div style="position:absolute; top:35.5%; left:57.8%; width:7.3%; pointer-events:none; text-align:center;">
+                    <span id="dot-hp-pump" class="syn-status-dot off" style="width:6px;height:6px;border-radius:50%;background:#fff;border:1px solid #7F8C8D;display:inline-block;"></span>
+                </div>
+                <div style="position:absolute; top:51.7%; left:57.8%; width:7.3%; pointer-events:none; text-align:center;">
+                    <span id="syn-val-hp-speed" style="font-family:'Roboto Mono',monospace; font-size:7px; font-weight:700; color:#4A8AAA;">---</span>
+                </div>
+
+                <!-- Gauge PT-04 (HP discharge) -->
+                <div class="syn-block" style="pointer-events:auto; top:31.8%; left:66.9%; width:3.7%; height:6.3%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-p-hp-out" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a; position:absolute; bottom:18%; left:0; right:0;">---</span>
+                </div>
+
+                <!-- RO-1 membrane click target (also shows permeate pressure PT post-RO) -->
+                <div class="syn-block" style="pointer-events:auto; top:21.6%; left:74.7%; width:9.8%; height:7.1%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-p-permeat" style="font-family:'Roboto Mono',monospace; font-size:9px; font-weight:700; color:#1a1a1a; position:absolute; bottom:8%; left:0; right:50%;">---</span>
+                </div>
+
+                <!-- RO-2 membrane click target -->
+                <div class="syn-block" style="pointer-events:auto; top:51%; left:74.7%; width:9.8%; height:7.1%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                </div>
+
+                <!-- Gauge PT-Rej (concentrate) -->
+                <div class="syn-block" style="pointer-events:auto; top:70.2%; left:78.6%; width:3.5%; height:6.3%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-p-reject" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a; position:absolute; bottom:18%; left:0; right:0;">---</span>
+                </div>
+
+                <!-- Tank T-02 (permeate) fill + click target -->
+                <div class="syn-block" style="pointer-events:auto; top:33.3%; left:91%; width:5.1%; height:19.6%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('tanks','Réservoirs')">
+                    <div style="position:relative; width:100%; height:100%; overflow:hidden;">
+                        <div id="tank-permeat-fill" class="tank-fill" style="position:absolute; bottom:0; left:0; right:0; height:50%; background:#3B7A8C; opacity:0.45;"></div>
+                        <div id="tank-permeat-pct" class="tank-pct" style="position:absolute; width:100%; text-align:center; bottom:35%; font-family:'Roboto Mono',monospace; font-size:9px; font-weight:700; color:#1a1a1a;">50%</div>
+                    </div>
+                </div>
+                <div class="syn-block" style="pointer-events:auto; top:53.5%; left:91%; width:5.1%; height:2%; display:flex; align-items:center; justify-content:center; gap:3px;">
+                    <span id="dot-tank-high" class="syn-status-dot on" style="width:6px;height:6px;border-radius:50%;background:#475569;display:inline-block;"></span>
+                </div>
+
+                <!-- Conductivity CT-01 -->
+                <div class="syn-block" style="pointer-events:auto; top:60.8%; left:91.2%; width:4.3%; height:7.1%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-cond-permeat" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a; position:absolute; bottom:18%; left:0; right:0;">---</span>
+                </div>
+                <!-- Conductivity mix reuses same panel; value displayed off-canvas-safe -->
+                <div style="position:absolute; top:0; left:0; width:0; height:0; overflow:hidden;">
+                    <span id="syn-val-cond-mix">---</span>
+                </div>
+
+                <!-- Flow FT-02 (permeate) -->
+                <div class="syn-block" style="pointer-events:auto; top:73.5%; left:91.2%; width:4.3%; height:7.1%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('instruments','Instrumentation')">
+                    <span id="syn-val-flow-permeat" style="font-family:'Roboto Mono',monospace; font-size:11px; font-weight:700; color:#1a1a1a; position:absolute; bottom:18%; left:0; right:0;">---</span>
+                </div>
+                <div style="position:absolute; top:0; left:0; width:0; height:0; overflow:hidden;">
+                    <span id="syn-val-flow-conc">---</span>
+                </div>
+
+                <!-- Valve EVF -->
+                <div class="syn-block" style="pointer-events:auto; top:84.7%; left:2.2%; width:3.5%; height:9%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('global_management','Gestion Système')">
+                </div>
+
+                <!-- Valve EVE -->
+                <div class="syn-block" style="pointer-events:auto; top:84.7%; left:8%; width:3.5%; height:9%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('global_management','Gestion Système')">
+                </div>
+
+                <!-- Feed pump START button (bottom row) -->
+                <div class="syn-block" style="pointer-events:auto; top:84.3%; left:19.6%; width:6.9%; height:7.1%; cursor:pointer;"
+                     onclick="SynopticHMI.openPanel('feed_pump','Pompe Alimentation')">
+                </div>
+
+                <!-- Alarm button -->
+                <div id="alarm-banner-btn" class="syn-block syn-box--alarm" style="pointer-events:auto; top:84.3%; left:28.4%; width:6.9%; height:7.1%; cursor:pointer; border-radius:2px;"
+                     onclick="SynopticHMI.openPanel('global_management','Gestion Système')">
+                </div>
+
+                <!-- Mode indicator (top strip equivalent kept here too) -->
+                <div class="syn-block" style="pointer-events:auto; top:84.3%; left:51%; width:7.8%; height:7.1%; cursor:pointer; text-align:center;"
+                     onclick="SynopticHMI.openPanel('global_management','Gestion Système')">
+                    <span id="kpi-mode" class="syn-mode-indicator" style="position:absolute; bottom:14%; left:0; right:0; font-family:'Roboto Mono',monospace; font-size:10px; font-weight:700; color:#2E4057;">---</span>
+                </div>
+
+            </div>
+            <!-- /HTML overlay -->
+
+        </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpi-strip" style="display:flex; background:#2E3438; border-top:1px solid #1C2022;">
+        <div class="kpi" style="flex:1; padding:4px 8px; border-right:1px solid #1C2022;">
+            <div style="font-size:7px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5A6A70;">Pression HP</div>
+            <div style="font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; color:#009999;"><span id="kpi-p-hp">---</span> <span style="font-size:7px; color:#5A6A70;">bar</span></div>
+        </div>
+        <div class="kpi" style="flex:1; padding:4px 8px; border-right:1px solid #1C2022;">
+            <div style="font-size:7px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5A6A70;">Débit Perméat</div>
+            <div style="font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; color:#009999;"><span id="kpi-flow-permeat">---</span> <span style="font-size:7px; color:#5A6A70;">m³/h</span></div>
+        </div>
+        <div class="kpi" style="flex:1; padding:4px 8px; border-right:1px solid #1C2022;">
+            <div style="font-size:7px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5A6A70;">Conductivité</div>
+            <div style="font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; color:#009999;"><span id="kpi-cond">---</span> <span style="font-size:7px; color:#5A6A70;">μS/cm</span></div>
+        </div>
+        <div class="kpi" style="flex:1; padding:4px 8px; border-right:1px solid #1C2022;">
+            <div style="font-size:7px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5A6A70;">Mode Marche</div>
+            <div style="font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; color:#009999;" id="kpi-mode-strip-wrap"></div>
+        </div>
+        <div class="kpi" style="flex:1; padding:4px 8px;">
+            <div style="font-size:7px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5A6A70;">Heures Marche</div>
+            <div style="font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; color:#009999;"><span id="kpi-runtime">---</span></div>
+        </div>
+    </div>
+
+    <!-- VFD TAB CONTAINER (unchanged) -->
+   <div id="view-vfd" class="hidden flex-grow bg-[#1a1f29] border border-[#52575A] rounded-sm p-4 overflow-y-auto">
+        {% include 'modules/vfd/vfd-panel.html' %}
+    </div>
+
+</main>
+
+<!--
+  ════════════════════════════════════════════════════════════════
+  SMALL CSS NOTE (do this once in synoptic.css, takes 10 seconds):
+
+  The old .loc-* pixel rules (.loc-tank-raw, .loc-hp-pump, etc.) are
+  no longer used by this file — positioning now lives inline on each
+  .syn-block as percentages matching the SVG's 1020×510 coordinate
+  space, so it stays aligned with the artwork at any canvas width.
+  You can safely delete the whole "GEOMETRIC COORD MAPPING
+  DIRECTIVES" block from synoptic.css, or just leave it — it's dead
+  code now since none of those class names are used in this markup.
+
+  Everything else in synoptic.css (.syn-status-dot, .tank-fill,
+  .dp-bar-fill, .wincc-btn, #detail-panel, .modal-overlay, etc.)
+  is still used exactly as before — untouched.
+  ════════════════════════════════════════════════════════════════
+-->

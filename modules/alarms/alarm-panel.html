@@ -1,0 +1,132 @@
+<div id="view-alarms" class="hidden flex-grow flex flex-col p-2 gap-2 h-full src-view-component animate-fade-in">
+    
+    <div class="flex-1 bg-white border border-[#8A9195] rounded-sm shadow-sm flex flex-col overflow-hidden">
+        
+        <div class="bg-[#3E4245] px-2.5 py-1.5 flex items-center justify-between border-b border-[#1C2022]">
+            <div class="flex items-center gap-2 select-none">
+                <i class="fa-solid fa-triangle-exclamation text-[#FF0044] text-[11px] animate-pulse"></i>
+                <span class="text-[10px] text-white font-bold uppercase tracking-wider plc-mono">Journal des Alarmes Actives</span>
+                <span id="alarm-count-badge" class="bg-[#FF0044] text-white text-[9px] font-bold px-2 py-0.2 rounded-sm border border-[#21020A]">0</span>
+            </div>
+            <div>
+                <button id="btn-ack-all" 
+                        onclick="HmiApp.acknowledgeAllAlarms()"
+                        class="bg-[#DFE4E6] hover:bg-[#C5CBD0] border border-[#52575A] text-[9px] text-[#111111] font-bold px-2 py-0.5 rounded-sm transition-colors uppercase tracking-wide shadow-sm active:translate-y-px">
+                    <i class="fa-solid fa-check-double mr-1 text-emerald-700"></i> Acquitter Tout
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-[#10141b] border-b border-[#212a36] px-2.5 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 text-[9px] font-bold text-[#f0a93e] uppercase tracking-wider select-none">
+                <i class="fa-brands fa-whatsapp text-[#2bbf7a] text-sm"></i> Test Dispatch WhatsApp:
+            </div>
+            <div class="flex gap-2">
+                <button onclick="dispatchWhatsAppAlarm('hp_overpressure', this)"
+                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#dc2626] border border-[#dc2626] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>🚨</span> Surpression HP
+                </button>
+                
+                <button onclick="dispatchWhatsAppAlarm('hp_pump_fault', this)"
+                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#d97706] border border-[#d97706] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>⚡</span> Défaut Pompe HP
+                </button>
+                
+                <button onclick="dispatchWhatsAppAlarm('cond_high', this)"
+                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#059669] border border-[#059669] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>💧</span> Conductivité Perméat
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto max-h-[340px] text-[10px] plc-mono">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-[#C5CBD0] text-[#111111] uppercase font-bold text-[9px] sticky top-0 border-b border-[#8A9195] z-10 select-none">
+                        <th class="p-2 border-r border-[#8A9195] w-[15%]">Horodatage</th>
+                        <th class="p-2 border-r border-[#8A9195] w-[15%]">ID Tag PLC</th>
+                        <th class="p-2 border-r border-[#8A9195] w-[45%]">Désignation du Défaut</th>
+                        <th class="p-2 border-r border-[#8A9195] w-[13%]">Valeur</th>
+                        <th class="p-2 text-center w-[12%]">Statut</th>
+                    </tr>
+                </thead>
+                <tbody id="alarm-table-body" class="divide-y divide-[#DFE4E6]">
+                    <tr id="alarm-empty-row">
+                        <td colspan="5" class="p-8 text-center text-[#52575A] italic bg-[#F4F6F7] select-none">
+                            <i class="fa-solid fa-circle-check text-emerald-600 mr-1.5 text-sm"></i> 
+                            Aucune alarme active. L'installation fonctionne en mode nominal.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="bg-[#DFE4E6] px-3 py-1 flex justify-between items-center text-[9px] text-[#3E4245] font-bold border-t border-[#8A9195] select-none">
+            <div class="flex items-center gap-1.5">
+                <span>Statut HMI:</span>
+                <span id="alarm-system-status" class="text-emerald-700 uppercase tracking-wide font-bold">OK</span>
+            </div>
+            <div class="flex gap-4 uppercase tracking-wider text-[8px]">
+                <span>Critique: <span id="count-critical" class="text-red-600 font-bold">0</span></span>
+                <span>Alerte: <span id="count-warning" class="text-amber-600 font-bold">0</span></span>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+    async function dispatchWhatsAppAlarm(ruleId, btn) {
+        // 1. Vérification de l'état du moteur d'alarme via le Blueprint
+        try {
+            const statusRes = await fetch('/api/alarms/status');
+            if (!statusRes.ok) throw new Error("Status endpoint communication failure");
+            
+            const statusData = await statusRes.json();
+            if (!statusData.wa_ready) {
+                alert("Erreur: WhatsApp n'est pas prêt. Scannez d'abord le code QR.");
+                return;
+            }
+        } catch (e) {
+            alert("Erreur: Impossible de joindre le serveur local.");
+            console.error("HMI Status Check Exception:", e);
+            return;
+        }
+
+        // 2. Verrouillage de l'interface utilisateur (Spinner)
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Envoi...`;
+
+        // 3. Routage précis vers l'API de test du Blueprint avec l'ID configuré
+        try {
+            const res = await fetch(`/api/alarms/test/${ruleId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const data = await res.json();
+            
+            if (!res.ok) {
+                console.error("Dispatch Failed:", data.msg);
+                alert("Échec de l'envoi: " + (data.msg || "Engine error"));
+            } else {
+                console.log("Dispatch Success:", data.msg);
+                if (typeof HmiRenderer !== 'undefined') {
+                    HmiRenderer.appendEventLog(`Test WhatsApp envoyé pour l'id: [${ruleId}]`, "WA_SENT");
+                }
+            }
+        } catch (e) {
+            alert("Erreur serveur : le dispatch WhatsApp a échoué.");
+            console.error("Transmission exception:", e);
+        } finally {
+            // 4. Libération du bouton après temporisation de sécurité (4s)
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = originalContent;
+            }, 4000);
+        }
+    }
+</script>

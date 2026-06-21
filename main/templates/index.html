@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermeco Industrie Simatic HMI - Comfort Panel Layout</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hmi-styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/synoptic.css') }}">
+</head>
+
+<body class="bg-[#2A2B2D] text-[#111111] min-h-screen p-3 md:p-6 flex items-center justify-center">
+
+{% block content %}
+    {% include 'components/detail_panel.html' %}
+    {% include 'components/backwash_modal.html' %}
+
+    <div class="w-full max-w-6xl bg-[#3E4245] border-4 border-[#52575A] rounded-md shadow-2xl p-3 md:p-5 flex flex-col gap-3">
+        
+        <div class="flex justify-between items-center text-[#B1B7BC] text-[10px] font-bold tracking-widest px-1 uppercase select-none mb-1">
+            <div><span class="text-[#009999] font-extrabold">Thermeco</span> Industrie SIMATIC HMI</div>
+            <div class="text-[9px] tracking-normal text-[#8A9195]">TOUCH PANEL TP1200 COMFORT</div>
+        </div>
+
+        <div class="bg-[#DFE4E6] hmi-screen-inset border border-[#1C2022] flex flex-col flex-grow rounded-sm overflow-hidden select-none">
+            
+            {% include 'components/header.html' %}
+            {% include 'components/tab_bar.html' %}
+
+            {% include 'components/synoptic_canvas.html' %}
+            {% include 'components/view-engineering.html' %}
+            {% include 'modules/alarms/alarm-panel.html' %}         
+            {% include 'components/view_settings.html' %}
+           
+            {% include 'components/event_logger.html' %}
+            {% include 'components/footer.html' %}
+            
+        </div> 
+    </div>
+
+    {% include 'components/scripts.html' %}
+
+{% endblock %}
+
+</body>
+</html>

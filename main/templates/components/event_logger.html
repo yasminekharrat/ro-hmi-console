@@ -1,0 +1,82 @@
+{# main/templates/components/event_logger.html #}
+{# ══════════════════════════════════════════════════════════════════════════════
+   Event Log + Alarm Quick-Test Strip
+   
+   Structure:
+     1. Simatic Event Archive scrolling log (existing — unchanged)
+     2. Alarm Quick-Test strip — mini fire buttons for CRITICAL WhatsApp alarms
+        Built dynamically by alarm_comms.js using /api/alarms/config.
+        Only appears for rules with severity=CRITICAL AND whatsapp=True.
+        No fake data needed — test dispatch goes through the real engine.
+═══════════════════════════════════════════════════════════════════════════════= #}
+
+{# ── EVENT LOG ──────────────────────────────────────────────────────────────── #}
+<div class="bg-[#D2D7DA] border-t border-[#96A0A5] flex flex-col flex-shrink-0"
+     style="max-height:120px">
+
+    <div class="bg-[#3A4349] text-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider
+                flex justify-between items-center border-b border-[#1A2124]">
+        <span><i class="fa-solid fa-list-ul mr-1.5"></i>Simatic Event Archive</span>
+        <div class="flex items-center gap-3">
+            <a href="/modules/alarms/alarm-panel.html"
+               class="text-[9px] text-[#A9B3B8] hover:text-white uppercase no-underline
+                      flex items-center gap-1 transition-colors">
+                <i class="fa-solid fa-bell text-amber-400"></i>Full Alarm Panel
+            </a>
+            <button onclick="SynopticHMI.clearLog()"
+                    class="text-[9px] text-slate-400 hover:text-white uppercase">Clear</button>
+        </div>
+    </div>
+
+    <div class="overflow-y-auto wincc-scrollbar bg-white text-[11px] plc-mono flex-1">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-[#E1E6E8] text-slate-600 uppercase text-[9px] font-bold
+                          tracking-wider sticky top-0 border-b border-[#B1B9BE]">
+                <tr>
+                    <th class="p-1.5 border-r border-[#B1B9BE] w-16">Time</th>
+                    <th class="p-1.5 border-r border-[#B1B9BE] w-24">Type</th>
+                    <th class="p-1.5">Message</th>
+                </tr>
+            </thead>
+            <tbody id="message-log-rows">
+                <tr id="log-empty-row">
+                    <td colspan="3" class="p-2 text-center text-[10px] text-slate-400 italic">
+                        No events.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── ALARM QUICK-TEST STRIP ──────────────────────────────────────────────────
+   This bar is built by alarm_comms.js on page load.
+   It reads /api/alarms/config and renders one button per CRITICAL+whatsapp rule.
+   
+   ┌─────────────────────────────────────────────────────────────────────────┐
+   │  🔴 ALARMES  │ [Test: HP Overpressure 🟢WA] [Test: HP Fault 🟢WA] ... │
+   └─────────────────────────────────────────────────────────────────────────┘
+#}
+<div class="bg-[#1A1F22] border-t border-[#0F1315] flex-shrink-0 px-3 py-1.5
+            flex items-center gap-2 flex-wrap min-h-[36px]">
+
+    <div class="flex items-center gap-1.5 pr-3 border-r border-[#2D3748] flex-shrink-0">
+        <span class="w-2 h-2 bg-[#EF4444] rounded-full animate-pulse"></span>
+        <span class="text-[8px] font-bold text-[#64748B] uppercase tracking-wider">
+            Test Alarmes
+        </span>
+    </div>
+
+    {# Container filled by alarm_comms.js._buildTestButtons() #}
+    <div id="alarm-quick-test-strip" class="flex flex-wrap gap-1.5 items-center flex-1">
+        {# Placeholder while JS loads #}
+        <span class="text-[8px] text-[#374151] italic plc-mono">Loading alarm rules…</span>
+    </div>
+
+    {# Test result feedback — shown/hidden by alarm_comms.js #}
+    <div id="alarm-test-result"
+         class="hidden text-[9px] plc-mono text-[#00FF55] px-2 py-0.5
+                bg-[#052e16] border border-[#00FF55] rounded-sm ml-auto">
+    </div>
+
+</div>

@@ -1,0 +1,732 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siemens Simatic HMI — RO System Synoptic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+        * { box-sizing: border-box; }
+        body { font-family: 'Tahoma', 'Arial', sans-serif; -webkit-font-smoothing: antialiased; }
+        .plc-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* WinCC-style beveled UI */
+        .hmi-screen-inset { box-shadow: inset 2px 2px 5px rgba(0,0,0,0.35); }
+        .wincc-btn {
+            box-shadow: 1px 1px 0px #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset;
+            cursor: pointer;
+        }
+        .wincc-btn:active { box-shadow: -1px -1px 0px #fff inset, 1px 1px 1px rgba(0,0,0,0.4) inset; }
+        .wincc-input { box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3); }
+        .wincc-panel { border: 1px solid #7F8C8D; box-shadow: 1px 1px 2px rgba(255,255,255,0.6) inset, -1px -1px 2px rgba(0,0,0,0.15) inset; }
+        .tab-active { background-color: #DFE4E6; border-bottom-color: #DFE4E6; font-weight: bold; color: #000; z-index: 10; }
+        .tab-inactive { background-color: #BAC3C7; border-bottom-color: #7F8C8D; color: #475569; }
+        .wincc-scrollbar::-webkit-scrollbar { width: 12px; }
+        .wincc-scrollbar::-webkit-scrollbar-track { background: #BAC3C7; border-left: 1px solid #96A0A5; }
+        .wincc-scrollbar::-webkit-scrollbar-thumb { background: #C2CBD0; border: 2px solid #BAC3C7; box-shadow: 1px 1px 0px #fff inset; }
+
+        /* ─── SYNOPTIC CANVAS ─────────────────────────────────── */
+        #synoptic-canvas {
+            position: relative;
+            background: #1A1F22;
+            width: 100%;
+            min-height: 520px;
+            overflow: hidden;
+        }
+        /* SVG pipe lines */
+        #synoptic-canvas svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* ─── SYNOPTIC COMPONENT BLOCKS ─────────────────────────── */
+        .syn-block {
+            position: absolute;
+            cursor: pointer;
+            transition: filter 0.15s, transform 0.1s;
+            user-select: none;
+        }
+        .syn-block:hover { filter: brightness(1.15); transform: scale(1.02); }
+        .syn-block:active { transform: scale(0.98); }
+
+        .syn-box {
+            border: 2px solid #4A5568;
+            background: linear-gradient(145deg, #2D3748, #1A202C);
+            color: #E2E8F0;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 10px;
+            min-width: 90px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .syn-box.active-running {
+            border-color: #00CC44;
+            box-shadow: 0 0 12px rgba(0,204,68,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .syn-box.alarm {
+            border-color: #FF3344;
+            box-shadow: 0 0 12px rgba(255,51,68,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+            animation: alarm-pulse 1s ease-in-out infinite alternate;
+        }
+        .syn-box.backwash {
+            border-color: #F59E0B;
+            box-shadow: 0 0 12px rgba(245,158,11,0.4);
+        }
+        @keyframes alarm-pulse {
+            from { box-shadow: 0 0 6px rgba(255,51,68,0.3); }
+            to   { box-shadow: 0 0 18px rgba(255,51,68,0.7); }
+        }
+
+        .syn-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94A3B8;
+            margin-bottom: 3px;
+        }
+        .syn-value {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: #00FFD5;
+        }
+        .syn-value.pressure { color: #60A5FA; }
+        .syn-value.flow     { color: #34D399; }
+        .syn-value.cond     { color: #FBBF24; }
+        .syn-value.level    { color: #A78BFA; }
+        .syn-unit {
+            font-size: 8px;
+            color: #64748B;
+            font-weight: 600;
+            margin-left: 2px;
+        }
+        .syn-status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #374151;
+            border: 1px solid #1F2937;
+        }
+        .syn-status-dot.on  { background: #00FF55; box-shadow: 0 0 6px #00FF55; animation: blink 2s ease-in-out infinite; }
+        .syn-status-dot.off { background: #FF3344; }
+        .syn-status-dot.warn{ background: #F59E0B; animation: blink 0.8s ease-in-out infinite; }
+        @keyframes blink {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.5; }
+        }
+
+        /* Tank level bar */
+        .tank-shell {
+            width: 50px; height: 70px;
+            border: 2px solid #4A5568;
+            border-radius: 3px;
+            background: #0F172A;
+            position: relative;
+            overflow: hidden;
+        }
+        .tank-fill {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(180deg, #06B6D4, #0284C7);
+            transition: height 0.5s ease;
+        }
+        .tank-fill.low  { background: linear-gradient(180deg, #F87171, #DC2626); }
+        .tank-fill.high { background: linear-gradient(180deg, #34D399, #059669); }
+        .tank-pct {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 10px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            bottom: 2px;
+            z-index: 1;
+        }
+
+        /* Filter clog indicator bar */
+        .dp-bar-bg { background: #1E293B; height: 8px; border-radius: 2px; overflow: hidden; }
+        .dp-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; background: #00D4AA; }
+        .dp-bar-fill.warn { background: #F59E0B; }
+        .dp-bar-fill.crit { background: #EF4444; }
+
+        /* ─── DETAIL PANEL (right drawer) ─────────────────────── */
+        #detail-panel {
+            position: fixed;
+            top: 0; right: -420px;
+            width: 420px;
+            height: 100vh;
+            background: #1E2326;
+            border-left: 2px solid #3A4349;
+            z-index: 1000;
+            transition: right 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #detail-panel.open { right: 0; }
+
+        .panel-header {
+            background: #4D555A;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #2F3437;
+            flex-shrink: 0;
+        }
+        .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+        .panel-body::-webkit-scrollbar { width: 8px; }
+        .panel-body::-webkit-scrollbar-thumb { background: #374151; }
+
+        .param-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            margin-bottom: 4px;
+            background: #141A1C;
+            border: 1px solid #2D3748;
+            border-radius: 3px;
+        }
+        .param-name { font-size: 10px; color: #94A3B8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+        .param-value { font-family: 'Roboto Mono', monospace; font-size: 13px; font-weight: 700; color: #00FFD5; }
+        .param-unit { font-size: 9px; color: #475569; margin-left: 3px; }
+        .param-value.bool-true  { color: #00FF55; }
+        .param-value.bool-false { color: #64748B; }
+
+        .section-title {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #475569;
+            margin: 12px 0 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #2D3748;
+        }
+
+        /* ─── MODALS ────────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 900;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: #deebf3;
+            border: 2px solid #4A5568;
+            border-radius: 4px;
+            width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* ─── LOG TABLE ──────────────────────────────────────────── */
+        .log-row-even { background: #F8FAFC; }
+        .log-row-odd  { background: #EEF2F5; }
+        .log-row-err  { background: #FEE2E2; color: #991B1B; font-weight: 700; }
+        .log-row-warn { background: #FEF3C7; color: #92400E; font-weight: 700; }
+    </style>
+</head>
+<body class="bg-[#2A2B2D] text-[#111111] min-h-screen p-3 md:p-4 flex items-center justify-center">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- DETAIL SIDE PANEL                                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="detail-panel">
+    <div class="panel-header">
+        <div>
+            <div id="dp-title" class="text-sm font-bold uppercase tracking-wider">Component Detail</div>
+            <div id="dp-subtitle" class="text-[10px] text-[#A9B3B8] mt-0.5 plc-mono">Select a component</div>
+        </div>
+        <button onclick="SynopticHMI.closePanel()" class="wincc-btn bg-[#5A646A] hover:bg-[#68737A] px-3 py-1 text-xs font-bold border border-[#2F3437] text-white">✕ CLOSE</button>
+    </div>
+    <div id="dp-body" class="panel-body wincc-scrollbar"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- BACKWASH SETTINGS MODAL                                         -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="backwash-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="bg-[#4D555A] text-white px-4 py-3 flex justify-between items-center border-b-2 border-[#2F3437]">
+            <span class="font-bold text-sm uppercase tracking-wider"><i class="fa-solid fa-arrows-rotate mr-2 text-amber-400"></i>Paramètres Contre-Lavage</span>
+            <button onclick="document.getElementById('backwash-modal').classList.remove('open')" class="text-[#A9B3B8] hover:text-white text-lg font-bold">✕</button>
+        </div>
+        <div class="p-5">
+            <div class="space-y-4 text-sm text-[#CBD5E1]">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">ΔP Seuil Déclenchement (Bar)</label>
+                    <input type="number" id="bw-dp-threshold" step="0.1" value="0.5" min="0" max="3"
+                           class="w-full bg-[#141A1C] text-[#00FFD5] border border-[#374151] px-3 py-2 plc-mono text-sm rounded outline-none focus:border-[#00FFD5]">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">Durée Contre-Lavage (min)</label>
+                    <input type="number" id="bw-duration" step="1" value="5" min="1" max="60"
+                           class="w-full bg-[#141A1C] text-[#00FFD5] border border-[#374151] px-3 py-2 plc-mono text-sm rounded outline-none focus:border-[#00FFD5]">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button onclick="SynopticHMI.applyBackwashSettings()" class="wincc-btn flex-1 bg-[#1D4ED8] hover:bg-[#2563EB] text-white font-bold py-2 text-xs border border-[#1E3A8A] uppercase tracking-wider">
+                        <i class="fa-solid fa-floppy-disk mr-1.5"></i>Appliquer
+                    </button>
+                    <button onclick="SynopticHMI.startManualBackwash()" class="wincc-btn flex-1 bg-[#B45309] hover:bg-[#D97706] text-white font-bold py-2 text-xs border border-[#78350F] uppercase tracking-wider">
+                        <i class="fa-solid fa-arrows-rotate mr-1.5"></i>Lancer Manuellement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MAIN HMI FRAME                                                  -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="w-full max-w-6xl bg-[#3E4245] border-4 border-[#52575A] rounded-md shadow-2xl p-3 md:p-5 flex flex-col gap-3">
+    <!-- Manufacturer bar -->
+    <div class="flex justify-between items-center text-[#B1B7BC] text-[10px] font-bold tracking-widest px-1 uppercase select-none">
+        <div><span class="text-[#009999] font-extrabold">SIEMENS</span> SIMATIC HMI</div>
+        <div class="text-[9px] tracking-normal text-[#8A9195]">TOUCH PANEL TP1200 COMFORT</div>
+    </div>
+
+    <!-- Screen bezel -->
+    <div class="bg-[#DFE4E6] hmi-screen-inset border border-[#1C2022] flex flex-col flex-grow rounded-sm overflow-hidden select-none">
+
+        <!-- Header toolbar -->
+        <header class="bg-[#4D555A] text-white border-b-2 border-[#2F3437] px-4 py-2 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-[#2B3033] border border-[#6F777D] text-[#00FFCC] px-2 py-1 text-xs rounded-sm font-bold tracking-wider uppercase">
+                    <i class="fa-solid fa-industry mr-1.5 text-[10px]"></i>Station 01
+                </div>
+                <div>
+                    <h1 class="text-xs font-bold tracking-wide text-white uppercase">Thermeco Industrie</h1>
+                    <p class="text-[9px] text-[#A9B3B8] font-medium tracking-wider uppercase">Reverse Osmosis Control System — Vue Synoptique</p>
+                </div>
+            </div>
+            <div class="flex items-center bg-[#3A4043] border border-[#232729] p-1 text-xs rounded-none gap-2">
+                <div class="flex items-center gap-1.5 px-2">
+                    <i class="fa-solid fa-ethernet text-[#A9B3B8] text-[10px]"></i>
+                    <span class="text-[10px] text-[#C5CED2] uppercase font-bold tracking-wider mr-1">IP:</span>
+                    <input type="text" id="ip" value="192.168.1.10"
+                           class="bg-[#1F2224] text-[#00FF55] text-xs font-bold plc-mono w-28 border border-[#545E63] p-0.5 text-center outline-none focus:border-[#00FFCC] wincc-input">
+                </div>
+                <select id="slot-select" class="bg-[#1F2224] text-[#00FF55] text-[10px] font-bold plc-mono border border-[#545E63] p-0.5 outline-none">
+                    <option value="1">Slot 1 (PLCSim)</option>
+                    <option value="2">Slot 2 (S7-1200)</option>
+                </select>
+                <button onclick="HmiApp.establishConnection()" class="wincc-btn bg-[#5A646A] hover:bg-[#68737A] text-[10px] font-bold text-white px-3 py-1 border border-[#2F3437] transition uppercase tracking-wider">
+                    Connect
+                </button>
+                <div class="px-1.5 border-l border-[#2F3437]">
+                    <div id="status-dot" class="w-3 h-3 bg-[#FF0044] border border-[#21020A] rounded-full shadow-md"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab bar -->
+        <nav class="bg-[#BAC3C7] border-b border-[#7F8C8D] flex px-2 pt-1.5 gap-1 select-none">
+            <button id="btn-synoptic" onclick="SynopticHMI.showView('synoptic')"
+                    class="wincc-btn tab-active text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm">
+                <i class="fa-solid fa-diagram-project mr-1.5 text-slate-600"></i>Vue Synoptique
+            </button>
+            
+            <button id="btn-dataview" onclick="SynopticHMI.showView('dataview')"
+                    class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75">
+                <i class="fa-solid fa-table-cells mr-1.5"></i>Données Live
+            </button>
+
+            <a id="btn-tab-vfd" href="/modules/vfd/vfd-panel.html" 
+            class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75 flex items-center gap-1.5 hover:bg-[#cbd3d6] no-underline text-inherit">
+                <i class="fa-solid fa-gauge mr-1.5"></i>Variateur VFD
+            </a>
+
+            <button id="btn-settings" onclick="SynopticHMI.showView('settings')"
+                    class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75">
+                <i class="fa-solid fa-sliders mr-1.5"></i>Consignes
+            </button>
+        </nav>
+
+        <!-- ─────────────────────────────────────────────────── -->
+        <!-- VIEW: SYNOPTIC                                        -->
+        <!-- ─────────────────────────────────────────────────── -->
+        <main id="view-synoptic" class="flex-grow flex flex-col overflow-hidden">
+
+            <!-- KPI strip -->
+            <div class="bg-[#2D3337] px-4 py-2 flex flex-wrap gap-4 items-center border-b border-[#1A1F22]">
+                <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Mode:</span>
+                    <span id="kpi-mode" class="text-[10px] font-bold plc-mono text-[#FBBF24]">---</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Q Perméat:</span>
+                    <span id="kpi-flow-permeat" class="text-[10px] font-bold plc-mono text-[#34D399]">0.00</span>
+                    <span class="text-[9px] text-[#475569]">m³/h</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Cond.:</span>
+                    <span id="kpi-cond" class="text-[10px] font-bold plc-mono text-[#FBBF24]">0.0</span>
+                    <span class="text-[9px] text-[#475569]">µS/cm</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">P HP:</span>
+                    <span id="kpi-p-hp" class="text-[10px] font-bold plc-mono text-[#60A5FA]">0.00</span>
+                    <span class="text-[9px] text-[#475569]">Bar</span>
+                </div>
+                <div class="ml-auto flex items-center gap-2">
+                    <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Heures marche:</span>
+                    <span id="kpi-runtime" class="text-[10px] font-bold plc-mono text-[#00FFCC]">0h 0m</span>
+                </div>
+                <div id="alarm-badge" class="hidden flex items-center gap-1.5 bg-red-900 border border-red-600 px-2 py-0.5 rounded-sm">
+                    <span class="w-2 h-2 bg-red-400 rounded-full animate-ping"></span>
+                    <span class="text-[9px] text-red-300 font-bold uppercase tracking-wider">ALARME ACTIVE</span>
+                </div>
+            </div>
+
+            <!-- Synoptic canvas -->
+            <div id="synoptic-canvas" class="flex-grow relative">
+
+                <!-- SVG pipes layer -->
+                <svg id="pipe-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+                    <defs>
+                        <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                            <path d="M0,0 L0,6 L6,3 z" fill="#334155"/>
+                        </marker>
+                        <marker id="arr-active" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                            <path d="M0,0 L0,6 L6,3 z" fill="#00CC44"/>
+                        </marker>
+                    </defs>
+                    <!-- Pipes drawn by JS after layout -->
+                </svg>
+
+                <!-- ── TANK EAU BRUTE ────────── pos: 2%, 30% -->
+                <div class="syn-block" id="syn-tank-raw" style="left:2%;top:28%" onclick="SynopticHMI.openPanel('tanks','Réservoir Eau Brute')">
+                    <div class="syn-box" style="min-width:80px;text-align:center">
+                        <div class="syn-label mb-1">Eau Brute</div>
+                        <div class="tank-shell mx-auto mb-1" id="tank-raw-shell">
+                            <div class="tank-fill" id="tank-raw-fill" style="height:50%"></div>
+                            <div class="tank-pct" id="tank-raw-pct">50%</div>
+                        </div>
+                        <div class="flex items-center justify-center gap-1 mt-1">
+                            <span class="syn-status-dot" id="dot-tank-low"></span>
+                            <span style="font-size:8px;color:#64748B">NIVEAU</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── POMPE ALIMENTATION ────── pos: 14%, 38% -->
+                <div class="syn-block" id="syn-feed-pump" style="left:14%;top:35%" onclick="SynopticHMI.openPanel('feed_pump','Pompe d\'Alimentation')">
+                    <div class="syn-box" id="box-feed-pump">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label">Pompe Alim.</div>
+                            <span class="syn-status-dot" id="dot-feed-pump"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <i class="fa-solid fa-circle-notch text-[#334155] text-lg"></i>
+                            <div>
+                                <div class="syn-value pressure text-xs" id="syn-val-p-low">0.00<span class="syn-unit">B</span></div>
+                                <div style="font-size:8px;color:#475569">P seuil</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── FILTRE SABLE ───────────── pos: 28%, 22% -->
+                <div class="syn-block" id="syn-sand-filter" style="left:28%;top:18%" onclick="SynopticHMI.openPanel('sand_filter','Filtre à Sable')">
+                    <div class="syn-box" id="box-sand-filter" style="min-width:110px">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label">Filtre Sable</div>
+                            <span class="syn-status-dot" id="dot-sand-bw"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                            <div>
+                                <div style="font-size:7px;color:#475569">P entrée</div>
+                                <div class="syn-value pressure" style="font-size:11px" id="syn-val-p-in-filter">0.00<span class="syn-unit">B</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size:7px;color:#475569">P sortie</div>
+                                <div class="syn-value pressure" style="font-size:11px" id="syn-val-p-out-filter">0.00<span class="syn-unit">B</span></div>
+                            </div>
+                        </div>
+                        <div class="mt-1.5">
+                            <div class="flex justify-between" style="font-size:7px;color:#475569;margin-bottom:2px">
+                                <span>ΔP</span><span id="syn-val-dp-sand" class="plc-mono">0.00 B</span>
+                            </div>
+                            <div class="dp-bar-bg"><div class="dp-bar-fill" id="dp-bar-sand" style="width:0%"></div></div>
+                        </div>
+                        <button onclick="event.stopPropagation();document.getElementById('backwash-modal').classList.add('open')"
+                                class="wincc-btn mt-2 w-full bg-[#78350F] hover:bg-[#92400E] text-[#FBBF24] border border-[#92400E] text-[8px] font-bold uppercase py-0.5 tracking-wider">
+                            <i class="fa-solid fa-arrows-rotate mr-1"></i>Contre-Lavage
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── FILTRE 5µ ───────────────── pos: 44%, 22% -->
+                <div class="syn-block" id="syn-filter-5u" style="left:44%;top:18%" onclick="SynopticHMI.openPanel('cartridge_filters','Filtre 5 Microns')">
+                    <div class="syn-box" id="box-filter-5u" style="min-width:95px">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label">Filtre 5µ</div>
+                            <span class="syn-status-dot" id="dot-filter-5u"></span>
+                        </div>
+                        <div>
+                            <div style="font-size:7px;color:#475569">P sortie</div>
+                            <div class="syn-value pressure" id="syn-val-p-out-5u">0.00<span class="syn-unit">B</span></div>
+                        </div>
+                        <div class="mt-1.5">
+                            <div class="flex justify-between" style="font-size:7px;color:#475569;margin-bottom:2px">
+                                <span>ΔP colmat.</span><span id="syn-val-dp-5u" class="plc-mono">0.00 B</span>
+                            </div>
+                            <div class="dp-bar-bg"><div class="dp-bar-fill" id="dp-bar-5u" style="width:0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── FILTRE 1µ ───────────────── pos: 58%, 22% -->
+                <div class="syn-block" id="syn-filter-1u" style="left:58%;top:18%" onclick="SynopticHMI.openPanel('cartridge_filters','Filtre 1 Micron')">
+                    <div class="syn-box" id="box-filter-1u" style="min-width:95px">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label">Filtre 1µ</div>
+                            <span class="syn-status-dot" id="dot-filter-1u"></span>
+                        </div>
+                        <div>
+                            <div style="font-size:7px;color:#475569">P sortie</div>
+                            <div class="syn-value pressure" id="syn-val-p-out-1u">0.00<span class="syn-unit">B</span></div>
+                        </div>
+                        <div class="mt-1.5">
+                            <div class="flex justify-between" style="font-size:7px;color:#475569;margin-bottom:2px">
+                                <span>ΔP colmat.</span><span id="syn-val-dp-1u" class="plc-mono">0.00 B</span>
+                            </div>
+                            <div class="dp-bar-bg"><div class="dp-bar-fill" id="dp-bar-1u" style="width:0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── POMPE HP ────────────────── pos: 44%, 52% -->
+                <div class="syn-block" id="syn-hp-pump" style="left:44%;top:52%" onclick="SynopticHMI.openPanel('hp_pump','Pompe Haute Pression')">
+                    <div class="syn-box" id="box-hp-pump" style="min-width:110px">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label">Pompe HP</div>
+                            <span class="syn-status-dot" id="dot-hp-pump"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-2">
+                            <div>
+                                <div style="font-size:7px;color:#475569">P sortie</div>
+                                <div class="syn-value pressure" id="syn-val-p-hp-out">0.00<span class="syn-unit">B</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size:7px;color:#475569">Vitesse</div>
+                                <div class="syn-value" style="color:#A78BFA;font-size:11px" id="syn-val-hp-speed">0.0<span class="syn-unit">Hz</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── MEMBRANES RO ────────────── pos: 62%, 42% -->
+                <div class="syn-block" id="syn-ro-membranes" style="left:62%;top:38%" onclick="SynopticHMI.openPanel('instruments','Membranes RO')">
+                    <div class="syn-box" id="box-ro" style="min-width:130px">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="syn-label" style="color:#60A5FA">⬡ Membranes RO</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
+                            <div>
+                                <div style="font-size:7px;color:#475569">P rejet</div>
+                                <div class="syn-value pressure" style="font-size:11px" id="syn-val-p-reject">0.00<span class="syn-unit">B</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size:7px;color:#475569">P perméat</div>
+                                <div class="syn-value pressure" style="font-size:11px" id="syn-val-p-permeat">0.00<span class="syn-unit">B</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size:7px;color:#475569">Q perméat</div>
+                                <div class="syn-value flow" style="font-size:11px" id="syn-val-flow-permeat">0.00<span class="syn-unit">m³/h</span></div>
+                            </div>
+                            <div>
+                                <div style="font-size:7px;color:#475569">Q concentrat</div>
+                                <div class="syn-value flow" style="font-size:11px" id="syn-val-flow-conc">0.00<span class="syn-unit">m³/h</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── TANK PERMEAT ────────────── pos: 82%, 28% -->
+                <div class="syn-block" id="syn-tank-permeat" style="left:83%;top:26%" onclick="SynopticHMI.openPanel('tanks','Réservoir Perméat')">
+                    <div class="syn-box" style="min-width:80px;text-align:center">
+                        <div class="syn-label mb-1">Perméat</div>
+                        <div class="tank-shell mx-auto mb-1" id="tank-permeat-shell">
+                            <div class="tank-fill" id="tank-permeat-fill" style="height:50%"></div>
+                            <div class="tank-pct" id="tank-permeat-pct">50%</div>
+                        </div>
+                        <div class="flex items-center justify-center gap-1 mt-1">
+                            <span class="syn-status-dot" id="dot-tank-high"></span>
+                            <span style="font-size:8px;color:#64748B">NIVEAU</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── CONDUCTIVITY DISPLAY ──── pos: 82%, 58% -->
+                <div class="syn-block" id="syn-cond" style="left:83%;top:57%" onclick="SynopticHMI.openPanel('instruments','Conductivité')">
+                    <div class="syn-box" style="min-width:100px">
+                        <div class="syn-label mb-1">Qualité Perméat</div>
+                        <div>
+                            <div style="font-size:7px;color:#475569">Conductivité</div>
+                            <div class="syn-value cond" id="syn-val-cond-permeat">0.0<span class="syn-unit">µS/cm</span></div>
+                        </div>
+                        <div class="mt-1">
+                            <div style="font-size:7px;color:#475569">Mélange</div>
+                            <div class="syn-value cond" style="font-size:11px" id="syn-val-cond-mix">0.0<span class="syn-unit">µS/cm</span></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /synoptic-canvas -->
+        </main>
+
+        <!-- ─────────────────────────────────────────────────── -->
+        <!-- VIEW: DATA TABLE                                      -->
+        <!-- ─────────────────────────────────────────────────── -->
+        <main id="view-dataview" class="hidden flex-grow overflow-y-auto p-4 wincc-scrollbar bg-[#DFE4E6]">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="data-table-grid">
+                <!-- Built dynamically by JS -->
+            </div>
+        </main>
+
+        <!-- ─────────────────────────────────────────────────── -->
+        <!-- VIEW: SETTINGS                                        -->
+        <!-- ─────────────────────────────────────────────────── -->
+       <main id="view-settings" class="hidden flex-grow overflow-y-auto p-4 wincc-scrollbar bg-[#DFE4E6]">
+            <div class="wincc-panel bg-[#D2D7DA] p-3 border border-[#7F8C8D] rounded-sm mb-3 shadow-[inset_1px_1px_0px_#fff]">
+                <div class="text-[10px] font-bold uppercase text-slate-700 tracking-wider mb-3 border-b border-[#A2AEC2] pb-1">
+                    <i class="fa-solid fa-sliders mr-1.5 text-slate-600"></i>Consignes Process — DB50
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    
+                    <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                        <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Pompe HP</div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-slate-700 text-[9px] w-28">P Max admissible (Bar)</span>
+                            <input type="number" id="cfg-p-max" step="0.5" value="16" 
+                                class="flex-1 bg-white text-black border border-[#7F8C8D] px-2 py-1 plc-mono text-xs outline-none shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]">
+                        </div>
+                        <button onclick="HmiApp.triggerWrite(50,'26.0',parseFloat(document.getElementById('cfg-p-max').value))"
+                                class="wincc-btn w-full bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                            Appliquer P Max HP
+                        </button>
+                    </div>
+
+                    <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                        <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Qualité Perméat</div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-slate-700 text-[9px] w-28">Cond. Max (µS/cm)</span>
+                            <input type="number" id="cfg-cond-max" step="10" value="500" 
+                                class="flex-1 bg-white text-black border border-[#7F8C8D] px-2 py-1 plc-mono text-xs outline-none shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]">
+                        </div>
+                        <button onclick="HmiApp.triggerWrite(50,'46.0',parseFloat(document.getElementById('cfg-cond-max').value))"
+                                class="wincc-btn w-full bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                            Appliquer Cond Max
+                        </button>
+                    </div>
+
+                    <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                        <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Mode Opérationnel</div>
+                        <div class="flex gap-2">
+                            <button onclick="HmiApp.triggerWrite(50,'44.0',true)"
+                                    class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                                Mode AUTO
+                            </button>
+                            <button onclick="HmiApp.triggerWrite(50,'44.0',false)"
+                                    class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                                Mode MANUEL
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                        <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Pompe Alimentation</div>
+                        <div class="flex gap-2">
+                            <button onclick="HmiApp.triggerWrite(50,'20.0',true)"
+                                    class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                                MARCHE
+                            </button>
+                            <button onclick="HmiApp.triggerWrite(50,'20.0',false)"
+                                    class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                                ARRÊT
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+            <!-- DB Diagnostic tool -->
+            <div class="wincc-panel bg-[#D2D7DA] p-3 rounded-sm">
+                <div class="text-[10px] font-bold uppercase text-teal-800 tracking-wider mb-3 border-b border-[#A2AEC2] pb-1">
+                    <i class="fa-solid fa-bug mr-1.5 text-teal-700"></i>Diagnostic DB Dump (NetToPLCSim Debug)
+                </div>
+                <div class="flex gap-2 mb-2">
+                    <div class="flex items-center gap-1">
+                        <span class="text-[9px] text-slate-600 font-bold">DB:</span>
+                        <input type="number" id="diag-db" value="51" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-[9px] text-slate-600 font-bold">Start:</span>
+                        <input type="number" id="diag-start" value="0" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-[9px] text-slate-600 font-bold">Len:</span>
+                        <input type="number" id="diag-len" value="48" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+                    </div>
+                    <button onclick="SynopticHMI.runDiagDump()" class="wincc-btn bg-[#1D4ED8] text-white px-3 py-0.5 text-[9px] font-bold border border-[#1E3A8A] uppercase">Dump</button>
+                </div>
+                <pre id="diag-output" class="bg-[#141A1C] text-[#00FFD5] p-2 text-[9px] plc-mono rounded border border-[#374151] max-h-40 overflow-auto whitespace-pre-wrap">-- Résultat dump DB ici --</pre>
+            </div>
+        </main>
+
+        <!-- Event log -->
+        <div class="bg-[#D2D7DA] border-t border-[#96A0A5] flex flex-col flex-shrink-0" style="max-height:120px">
+            <div class="bg-[#3A4349] text-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider flex justify-between items-center border-b border-[#1A2124]">
+                <span><i class="fa-solid fa-list-ul mr-1.5"></i>Simatic Event Archive</span>
+                <button onclick="SynopticHMI.clearLog()" class="text-[9px] text-slate-400 hover:text-white uppercase">Clear</button>
+            </div>
+            <div class="overflow-y-auto wincc-scrollbar bg-white text-[11px] plc-mono flex-1">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-[#E1E6E8] text-slate-600 uppercase text-[9px] font-bold tracking-wider sticky top-0 border-b border-[#B1B9BE]">
+                        <tr>
+                            <th class="p-1.5 border-r border-[#B1B9BE] w-16">Time</th>
+                            <th class="p-1.5 border-r border-[#B1B9BE] w-24">Type</th>
+                            <th class="p-1.5">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="message-log-rows">
+                        <tr id="log-empty-row"><td colspan="3" class="p-2 text-center text-[10px] text-slate-400 italic">No events.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-[#D2D7DA] border-t-2 border-[#A2AEC2] px-4 py-1 flex justify-between items-center text-[10px] plc-mono text-slate-700">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-800">DIAG:</span>
+                <span id="terminal-msg" class="text-slate-600 font-bold">System framework standing by.</span>
+            </div>
+            <div class="text-slate-500 font-bold tracking-wider text-[9px]">SIMATIC RUNTIME V18.0.0</div>
+        </footer>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCRIPTS                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script src="{{ url_for('static', filename='js/hmi-comms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/hmi-render.js') }}"></script>
+<script src="{{ url_for('static', filename='js/hmi-app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/synoptic.js') }}"></script>
+
+</body>
+</html>

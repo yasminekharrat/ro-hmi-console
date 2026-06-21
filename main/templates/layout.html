@@ -1,0 +1,42 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theremeco Industrie Simatic HMI - Comfort Panel Layout</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hmi-styles.css') }}">
+     <link rel="stylesheet" href="{{ url_for('static', filename='css/synoptic.css') }}">
+</head>
+<body class="bg-[#2A2B2D] text-[#111111] min-h-screen p-3 md:p-6 flex items-center justify-center">
+
+    <div class="w-full max-w-5xl bg-[#3E4245] border-4 border-[#52575A] rounded-md shadow-2xl p-4 md:p-6 flex flex-col gap-3 relative">
+        
+        {% include 'components/header.html' %}
+
+        <div class="bg-[#DFE4E6] hmi-screen-inset border border-[#1C2022] flex flex-col flex-grow min-h-[700px] rounded-sm overflow-hidden select-none">
+            
+            {% include 'components/navigation.html' %}
+
+            <main class="p-4 flex-grow flex flex-col gap-4 overflow-y-auto">
+                
+                {% block content %}
+                {% endblock %}
+                
+                {% include 'components/event_logger.html' %}
+                
+            </main>
+
+            {% include 'components/footer.html' %}
+
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/hmi-app.js') }}"></script>
+</body>
+</html>

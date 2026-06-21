@@ -1,0 +1,55 @@
+{# main/templates/components/tab_bar.html #}
+{# ══════════════════════════════════════════════════════════════════════════════
+   Navigation tab bar — HMI Comfort Panel style.
+   
+   Tab routing logic:
+   - "Vue Synoptique" | "Données Live" | "Consignes" | "Alarmes" → handled by SynopticHMI.showView()
+     (in-page JavaScript tab switching, no page-reload navigation)
+   - "Variateur VFD"  → full page navigation to /modules/vfd/vfd-panel.html
+
+   To add a new in-page tab:
+     1. Add a <button> here calling SynopticHMI.showView('your-view-id')
+     2. Add <main id="view-your-view-id" class="hidden …"> in index.html
+     3. Build the view content in a new components/view_yourview.html
+═══════════════════════════════════════════════════════════════════════════════= #}
+
+<nav class="bg-[#BAC3C7] border-b border-[#7F8C8D] flex px-2 pt-1.5 gap-1 select-none overflow-x-auto">
+
+    {# ── IN-PAGE TABS ───────────────────────────────────────────────────────── #}
+
+  <button id="btn-synoptic"
+            onclick="SynopticHMI.showView('synoptic')"
+            class="wincc-btn tab-active text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm whitespace-nowrap flex items-center">
+        <i class="fa-solid fa-diagram-project mr-1.5 text-slate-400"></i>Vue Synoptique
+    </button>
+
+    <button id="btn-tab-alarms"
+            onclick="SynopticHMI.showView('alarms')"
+            class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75 flex items-center whitespace-nowrap">
+        <i class="fa-solid fa-bell mr-1.5 text-red-500"></i>Alarmes
+    </button>
+
+    <button id="btn-tab-engineering"
+            onclick="SynopticHMI.showView('engineering')"
+            class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5 border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75 flex items-center whitespace-nowrap">
+        <i class="fa-solid fa-gears mr-1.5 text-amber-500"></i>Configuration
+    </button>
+
+    {# ── SEPARATOR ──────────────────────────────────────────────────────────── #}
+    <div class="self-stretch w-px bg-[#7F8C8D] mx-1 my-1"></div>
+
+    {# ── SEPARATE MODULE TABS (full-page navigation) ────────────────────────── #}
+
+    <a  id="btn-tab-vfd"
+        href="/modules/vfd/vfd-panel.html"
+        title="Veichi AC10 Variable Frequency Drive"
+        class="wincc-btn tab-inactive text-xs uppercase tracking-wider px-4 py-1.5
+               border-t border-x border-[#7F8C8D] rounded-t-sm transition-all duration-75
+               flex items-center gap-1.5 hover:bg-[#cbd3d6] no-underline text-inherit
+               whitespace-nowrap">
+        <i class="fa-solid fa-gauge mr-1.5"></i>Variateur VFD
+        <span class="text-[7px] text-[#64748B] ml-0.5 font-normal normal-case tracking-normal
+                     bg-[#A2AEC2] px-1 py-0.5 rounded-sm">AC10</span>
+    </a>
+
+</nav>

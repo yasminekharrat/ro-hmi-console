@@ -1,0 +1,40 @@
+<!-- ═══════════════════════════════════════════════════════
+     SVG PIPE LAYER
+     All pipe polylines / paths are injected here at runtime
+     by SynopticPipes.draw() (js/pipes.js).
+     Only <defs> live here — do NOT add manual <line> elements.
+════════════════════════════════════════════════════════ -->
+<svg id="pipe-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <defs>
+        <!-- Supply / feed water (slate) -->
+        <marker id="arr-supply" markerWidth="8" markerHeight="8"
+                refX="6" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z" fill="#475569"/>
+        </marker>
+
+        <!-- High-pressure line (near-black) -->
+        <marker id="arr-hp" markerWidth="8" markerHeight="8"
+                refX="6" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z" fill="#1e293b"/>
+        </marker>
+
+        <!-- Permeate (blue) -->
+        <marker id="arr-permeat" markerWidth="8" markerHeight="8"
+                refX="6" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z" fill="#2563eb"/>
+        </marker>
+
+        <!-- Concentrate (amber) -->
+        <marker id="arr-conc" markerWidth="8" markerHeight="8"
+                refX="6" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z" fill="#b45309"/>
+        </marker>
+
+        <!-- Flush / rinse (green) -->
+        <marker id="arr-flush" markerWidth="8" markerHeight="8"
+                refX="6" refY="4" orient="auto">
+            <path d="M1,1 L7,4 L1,7 Z" fill="#16a34a"/>
+        </marker>
+    </defs>
+    <!-- Pipe polylines injected here by SynopticPipes.draw() -->
+</svg>

@@ -1,0 +1,42 @@
+<!-- ── MEMBRANE RO 1 (top HP pump + membrane train) ───────────── -->
+<div class="syn-block" id="syn-ro-1" style="left:20%;top:35%"
+     onclick="SynopticHMI.openPanel('hp_pump','Pompe HP 1 / RO 1')">
+    <div class="syn-box syn-box--membrane" id="box-ro-1" style="min-width:220px">
+
+        <div class="flex items-center justify-between mb-1">
+            <div class="syn-label">P.HP — Membrane 1</div>
+            <span class="syn-status-dot" id="dot-ro-1"></span>
+        </div>
+
+        <div class="syn-membrane-tube">
+            <div class="syn-pump-icon" id="pump-icon-ro1-in">
+                <i class="fa-solid fa-fan" id="fan-ro1-in"></i>
+            </div>
+            <div class="syn-tube-body"></div>
+            <div class="syn-pump-icon" id="pump-icon-ro1-out">
+                <i class="fa-solid fa-fan" id="fan-ro1-out"></i>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-x-2 mt-1.5">
+            <div>
+                <div style="font-size:7px;color:#475569">P aspir.</div>
+                <div class="syn-value pressure" style="font-size:10px" id="syn-val-p-pump1-in">
+                    --<span class="syn-unit">B</span>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:7px;color:#475569">P refoul.</div>
+                <div class="syn-value pressure" style="font-size:10px" id="syn-val-p-pump1-out">
+                    --<span class="syn-unit">B</span>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:7px;color:#475569">Vitesse</div>
+                <div class="syn-value" style="font-size:10px" id="syn-val-hz-pump1">
+                    --<span class="syn-unit">Hz</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

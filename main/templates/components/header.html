@@ -1,0 +1,27 @@
+
+
+<header class="bg-[#4D555A] text-white border-b-2 border-[#2F3437] px-4 py-2 flex flex-wrap justify-between items-center gap-3">
+    <div class="flex items-center gap-3">
+        <div class="bg-[#2B3033] border border-[#6F777D] text-[#00FFCC] px-2 py-1 text-xs rounded-sm font-bold tracking-wider uppercase">
+            <i class="fa-solid fa-industry mr-1.5 text-[10px]"></i>Station 01
+        </div>
+        <div>
+            <h1 class="text-xs font-bold tracking-wide text-white uppercase">Thermeco Industrie</h1>
+            <p class="text-[9px] text-[#A9B3B8] font-medium tracking-wider uppercase">Reverse Osmosis Control System</p>
+        </div>
+    </div>
+
+    <div class="flex items-center bg-[#3A4043] border border-[#232729] p-1 text-xs rounded-none gap-2">
+        <div class="flex items-center gap-1.5 px-2">
+            <i class="fa-solid fa-ethernet text-[#A9B3B8] text-[10px]"></i>
+            <span class="text-[10px] text-[#C5CED2] uppercase font-bold tracking-wider mr-1">IP:</span>
+            <input type="text" id="ip" value="192.168.0.1" class="bg-[#1F2224] text-[#00FF55] text-xs font-bold plc-mono w-28 border border-[#545E63] p-0.5 text-center outline-none focus:border-[#00FFCC] wincc-input">
+        </div>
+        <button onclick="HmiApp.establishConnection()" class="wincc-btn bg-[#5A646A] hover:bg-[#68737A] text-[10px] font-bold text-white px-3 py-1 border border-[#2F3437] transition uppercase tracking-wider">
+            Connect
+        </button>
+        <div class="px-1.5 border-l border-[#2F3437]">
+            <div id="status-dot" class="w-3 h-3 bg-[#FF0044] border border-[#21020A]"></div>
+        </div>
+    </div>
+</header>

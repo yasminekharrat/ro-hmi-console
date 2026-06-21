@@ -1,0 +1,69 @@
+<main id="view-synoptic" class="w-full flex-grow flex flex-col overflow-hidden src-view-component">
+
+    {% include 'components/kpi_strip.html' %}
+
+    <div id="synoptic-canvas" class="flex-grow flex flex-col">
+        <div id="view-overview" class="flex-grow relative bg-[#11141a] border border-[#52575A] rounded-sm overflow-hidden select-none">
+
+            {% include 'components/synoptic/components/pipe_svg.html' %}
+            
+            <div class="syn-block loc-station-status">{% include 'components/synoptic/components/station_status.html' %}</div>
+            <div class="syn-block loc-mode-indicator">{% include 'components/synoptic/components/mode_indicator.html' %}</div>
+
+            <div id="geo-pretreatment-zone" class="syn-zone">
+                <div class="syn-block loc-tank-raw">{% include 'components/synoptic/components/tank_raw.html' %}</div>
+                <div class="syn-block loc-gauge-p-inlet">{% include 'components/synoptic/components/gauge_p_inlet.html' %}</div>
+                <div class="syn-block loc-flow-inlet">{% include 'components/synoptic/components/flow_inlet.html' %}</div>
+                <div class="syn-block loc-filter-sand-fs1">{% include 'components/synoptic/components/filter_sand_fs1.html' %}</div>
+                <div class="syn-block loc-filter-sand-fs2">{% include 'components/synoptic/components/filter_sand_fs2.html' %}</div>
+            </div>
+
+            <div id="geo-filtration-zone" class="syn-zone">
+                <div class="syn-block loc-filter-cartridge-f5u">{% include 'components/synoptic/components/filter_cartridge_f5u.html' %}</div>
+                <div class="syn-block loc-filter-cartridge-f1u">{% include 'components/synoptic/components/filter_cartridge_f1u.html' %}</div>
+                <div class="syn-block loc-gauge-p-low">{% include 'components/synoptic/components/gauge_p_low.html' %}</div>
+            </div>
+
+            <div id="geo-high-pressure-zone" class="syn-zone">
+                <div class="syn-block loc-gauge-p-hp-top">{% include 'components/synoptic/components/gauge_p_hp_top.html' %}</div>
+                <div class="syn-block loc-gauge-p-pre-ro">{% include 'components/synoptic/components/gauge_p_pre_ro.html' %}</div>
+                
+             <div id="interactive-hp-pump-wrapper" class="syn-block loc-hp-pump" style="left:35%;top:45%">
+                    <div onclick="switchTab('vfd')" class="cursor-pointer hover:scale-105 transition-transform p-2 bg-[#232933] border border-cyan-500 rounded shadow-md flex flex-col items-center gap-1">
+                        <i class="fa-solid fa-fan text-xl text-cyan-400 animate-spin-slow"></i>
+                        <span class="text-[8px] font-bold text-white uppercase tracking-wider">Pompe HP (P-01)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="geo-ro-membranes-zone" class="syn-zone">
+                <div class="syn-block loc-membrane-ro1">{% include 'components/synoptic/components/membrane_ro1.html' %}</div>
+                <div class="syn-block loc-membrane-ro2">{% include 'components/synoptic/components/membrane_ro2.html' %}</div>
+                <div class="syn-block loc-gauge-p-post-ro">{% include 'components/synoptic/components/gauge_p_post_ro.html' %}</div>
+                <div class="syn-block loc-gauge-p-reject">{% include 'components/synoptic/components/gauge_p_reject.html' %}</div>
+                <div class="syn-block loc-gauge-p-conc">{% include 'components/synoptic/components/gauge_p_conc.html' %}</div>
+                <div class="syn-block loc-gauge-p-reject-out">{% include 'components/synoptic/components/gauge_p_reject_out.html' %}</div>
+            </div>
+
+            <div id="geo-product-zone" class="syn-zone">
+                <div class="syn-block loc-tank-permeat">{% include 'components/synoptic/components/tank_permeat.html' %}</div>
+                <div class="syn-block loc-tank-flush">{% include 'components/synoptic/components/tank_flush.html' %}</div>
+                <div class="syn-block loc-flow-permeat-top">{% include 'components/synoptic/components/flow_permeat_top.html' %}</div>
+                <div class="syn-block loc-cond-top">{% include 'components/synoptic/components/cond_top.html' %}</div>
+                <div class="syn-block loc-cond-bottom">{% include 'components/synoptic/components/cond_bottom.html' %}</div>
+            </div>
+
+            <div id="geo-actuators-zone" class="syn-zone">
+                <div class="syn-block loc-valve-evf">{% include 'components/synoptic/components/valve_evf.html' %}</div>
+                <div class="syn-block loc-valve-eve">{% include 'components/synoptic/components/valve_eve.html' %}</div>
+                <div class="syn-block loc-btn-start">{% include 'components/synoptic/components/btn_start.html' %}</div>
+                <div class="syn-block loc-btn-alarm">{% include 'components/synoptic/components/btn_alarm.html' %}</div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="view-vfd" class="hidden flex-grow bg-[#1a1f29] border border-[#52575A] rounded-sm p-4 overflow-y-auto">
+        {% include 'modules/vfd/vfd-panel.html' %}
+    </div>
+</main>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydraulics Transducer Instrumentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght=400;700&display=swap');
+        body { font-family: 'Tahoma', 'Arial', sans-serif; -webkit-font-smoothing: antialiased; }
+        .plc-mono { font-family: 'Roboto Mono', monospace; }
+        .hmi-screen-inset { box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.35); }
+        .wincc-panel { border: 1px solid #7F8C8D; box-shadow: 1px 1px 2px rgba(255,255,255,0.6) inset, -1px -1px 2px rgba(0,0,0,0.15) inset; }
+    </style>
+</head>
+<body class="bg-[#2A2B2D] text-[#111111] min-h-screen p-4 flex flex-col items-center justify-center gap-3">
+
+    <div class="w-full max-w-5xl bg-[#DCDFE1] border-2 border-[#1C2022] wincc-panel p-2 flex justify-between items-center rounded-sm">
+        <a href="/" class="bg-[#4D555A] hover:bg-[#5A646A] text-white border border-[#1C2022] px-4 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-circle-arrow-left text-teal-400 text-sm"></i> Return to Main HMI
+        </a>
+        <div class="flex items-center gap-2 font-mono text-xs text-slate-700 font-bold px-2">
+            <i class="fa-solid fa-microchip text-slate-500"></i> HYD_MODULE_ONLINE
+        </div>
+    </div>
+
+    <div class="w-full max-w-5xl bg-[#DFE4E6] hmi-screen-inset border-2 border-[#1C2022] p-4 flex flex-col gap-4 rounded-sm">
+        
+        <div class="bg-[#2B353A] text-white p-2 border border-[#1C2022] flex justify-between items-center">
+            <span class="text-xs font-bold uppercase tracking-wider"><i class="fa-solid fa-gauge-high mr-2 text-teal-400"></i>Hydraulic Transducer Sensor Array</span>
+            <span class="text-[10px] font-mono text-slate-400">4-20mA / 0-10V Differential Bus</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col">
+                <div class="text-[10px] font-bold text-slate-700 uppercase mb-1">System Main Pressure</div>
+                <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-3 rounded-sm">
+                    <div class="text-3xl font-black text-slate-900 plc-mono tracking-tight">
+                        <span id="hyd-press">0.0</span> <span class="text-sm font-bold text-slate-500 font-sans">PSI</span>
+                    </div>
+                    <div class="w-full h-2 bg-[#CBD5E1] mt-2 relative border border-[#94A3B8]">
+                        <div id="hyd-press-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-teal-600 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col">
+                <div class="text-[10px] font-bold text-slate-700 uppercase mb-1">Volumetric Flow Rate</div>
+                <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-3 rounded-sm">
+                    <div class="text-3xl font-black text-slate-900 plc-mono tracking-tight">
+                        <span id="hyd-flow">0.0</span> <span class="text-sm font-bold text-slate-500 font-sans">GPM</span>
+                    </div>
+                    <div class="w-full h-2 bg-[#CBD5E1] mt-2 relative border border-[#94A3B8]">
+                        <div id="hyd-flow-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-blue-600 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col">
+                <div class="text-[10px] font-bold text-slate-700 uppercase mb-1">Reservoir Oil Temp</div>
+                <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-3 rounded-sm">
+                    <div class="text-3xl font-black text-slate-900 plc-mono tracking-tight">
+                        <span id="hyd-temp">0.0</span> <span class="text-sm font-bold text-slate-500 font-sans">°C</span>
+                    </div>
+                    <div class="w-full h-2 bg-[#CBD5E1] mt-2 relative border border-[#94A3B8]">
+                        <div id="hyd-temp-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-amber-600 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="/hydraulics_static/hyd_comms.js"></script>
+</body>
+</html>

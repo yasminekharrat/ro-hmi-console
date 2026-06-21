@@ -1,0 +1,52 @@
+
+<div class="bg-[#2D3337] px-4 py-2 flex flex-wrap gap-4 items-center border-b border-[#1A1F22]">
+ 
+    <div class="flex items-center gap-2">
+        <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Mode:</span>
+        <span id="kpi-mode" class="text-[10px] font-bold plc-mono text-[#FBBF24]">---</span>
+    </div>
+ 
+    <div class="flex items-center gap-2">
+        <i class="fa-solid fa-droplets text-[#34D399] text-[9px]"></i>
+        <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Q Perméat:</span>
+        <span id="kpi-flow-permeat" class="text-[10px] font-bold plc-mono text-[#34D399]">0.00</span>
+        <span class="text-[9px] text-[#475569]">m³/h</span>
+    </div>
+ 
+    <div class="flex items-center gap-2">
+        <i class="fa-solid fa-wave-square text-[#FBBF24] text-[9px]"></i>
+        <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Cond.:</span>
+        <span id="kpi-cond" class="text-[10px] font-bold plc-mono text-[#FBBF24]">0.0</span>
+        <span class="text-[9px] text-[#475569]">µS/cm</span>
+    </div>
+ 
+    <div class="flex items-center gap-2">
+        <i class="fa-solid fa-gauge-high text-[#60A5FA] text-[9px]"></i>
+        <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">P HP:</span>
+        <span id="kpi-p-hp" class="text-[10px] font-bold plc-mono text-[#60A5FA]">0.00</span>
+        <span class="text-[9px] text-[#475569]">Bar</span>
+    </div>
+ 
+    <div class="flex items-center gap-2">
+        <i class="fa-solid fa-percent text-[#A78BFA] text-[9px]"></i>
+        <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Taux recup:</span>
+        <span id="kpi-recovery" class="text-[10px] font-bold plc-mono text-[#A78BFA]">0.0</span>
+        <span class="text-[9px] text-[#475569]">%</span>
+    </div>
+ 
+    <div class="ml-auto flex items-center gap-3">
+        <div class="flex items-center gap-2">
+            <i class="fa-regular fa-clock text-[#00FFCC] text-[9px]"></i>
+            <span class="text-[9px] text-[#64748B] uppercase font-bold tracking-wider">Marche:</span>
+            <span id="kpi-runtime" class="text-[10px] font-bold plc-mono text-[#00FFCC]">0h 0m</span>
+        </div>
+        <div id="alarm-badge"
+             class="hidden flex items-center gap-1.5 bg-red-900 border border-red-600
+                    px-2 py-0.5 rounded-sm">
+            <span class="w-2 h-2 bg-red-400 rounded-full animate-ping"></span>
+            <span class="text-[9px] text-red-300 font-bold uppercase tracking-wider">ALARME ACTIVE</span>
+        </div>
+    </div>
+ 
+</div>
+ 

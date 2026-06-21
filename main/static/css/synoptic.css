@@ -1,0 +1,448 @@
+/* ─── SYNOPTIC CANVAS & STRUCTURAL LAYOUT ────────────── */
+#synoptic-canvas {
+    position: relative;
+    background: #DFE4E6;
+    flex: 1 1 0%;
+    min-height: 480px;
+    overflow: hidden;
+}
+
+/* SVG pipe lines */
+#pipe-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Structural overlay containers for spatial mapping isolation */
+.syn-zone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Let background elements remain hoverable */
+}
+.syn-zone .syn-block {
+    pointer-events: auto; /* Re-enable clicks for individual equipment blocks */
+}
+
+/* ─── SYNOPTIC BLOCKS (shared base) ────────────────────── */
+.syn-block {
+    position: absolute;
+    cursor: pointer;
+    z-index: 1;
+    transition: filter 0.15s, transform 0.1s;
+    user-select: none;
+}
+.syn-block:hover { filter: brightness(1.05); transform: scale(1.02); z-index: 10; }
+.syn-block:active { transform: scale(0.98); }
+
+/* Base box */
+.syn-box {
+    border: 1px solid #7F8C8D;
+    background: #BAC3C7;
+    color: #000;
+    border-radius: 2px;
+    padding: 5px 7px;
+    font-size: 10px;
+    box-shadow: 1px 1px 2px rgba(255,255,255,0.6) inset,
+                -1px -1px 2px rgba(0,0,0,0.15) inset;
+}
+
+/* State variants */
+.syn-box.active-running {
+    border-color: #475569;
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.4);
+}
+.syn-box.backwash {
+    border-color: #475569;
+    background: #C2CBD0;
+}
+.syn-box.alarm {
+    border-color: #000;
+    background: #7F8C8D;
+    color: #fff;
+    animation: alarm-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes alarm-pulse {
+    from { box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3); }
+    to   { box-shadow: inset 1px 1px 6px rgba(0,0,0,0.8); }
+}
+
+/* ─── GEOMETRIC COORD MAPPING DIRECTIVES ──────────────── */
+
+/* Global Top Headers */
+.loc-station-status       { top: 20px; left: 20px; }
+.loc-mode-indicator       { top: 20px; left: 220px; }
+
+/* Zone 1 Layout Matrix: Pre-treatment (Left edge 2% to 25%) */
+.loc-tank-raw             { top: 130px; left: 30px; }
+.loc-gauge-p-inlet        { top: 100px; left: 110px; }
+.loc-flow-inlet           { top: 200px; left: 110px; }
+.loc-filter-sand-fs1      { top: 70px;  left: 190px; }
+.loc-filter-sand-fs2      { top: 250px; left: 190px; }
+
+/* Zone 2 Layout Matrix: Cartridges & High Pressure Loops (25% to 55%) */
+.loc-filter-cartridge-f5u { top: 160px; left: 280px; }
+.loc-filter-cartridge-f1u { top: 160px; left: 350px; }
+.loc-gauge-p-low          { top: 85px;  left: 310px; }
+.loc-hp-pump              { top: 165px; left: 430px; }
+.loc-gauge-p-hp-top       { top: 85px;  left: 435px; }
+.loc-gauge-p-pre-ro       { top: 85px;  left: 510px; }
+
+/* Zone 3 Layout Matrix: Reverse Osmosis Rack Arrays (55% to 80%) */
+.loc-membrane-ro1         { top: 100px; left: 590px; }
+.loc-membrane-ro2         { top: 230px; left: 590px; }
+.loc-gauge-p-post-ro      { top: 40px;  left: 630px; }
+.loc-gauge-p-reject       { top: 320px; left: 580px; }
+.loc-gauge-p-conc         { top: 320px; left: 660px; }
+.loc-gauge-p-reject-out   { top: 320px; left: 730px; }
+
+/* Zone 4 Layout Matrix: Permeate Output Storage Modules (80% to 100%) */
+.loc-tank-permeat         { top: 90px;  left: 810px; }
+.loc-tank-flush           { top: 130px; left: 910px; }
+.loc-flow-permeat-top     { top: 310px; left: 815px; }
+.loc-cond-top             { top: 365px; left: 815px; }
+.loc-cond-bottom          { top: 410px; left: 815px; }
+
+/* Bottom Screen Industrial UI Actuators */
+.loc-valve-evf            { top: 410px; left: 30px; }
+.loc-valve-eve            { top: 410px; left: 110px; }
+.loc-btn-start            { top: 405px; left: 210px; }
+.loc-btn-alarm            { top: 405px; left: 310px; }
+
+/* ─── TYPOGRAPHY ────────────────────────────────────────── */
+.syn-label {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #475569;
+    margin-bottom: 2px;
+}
+.syn-value {
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #000;
+    line-height: 1.1;
+}
+.syn-value.pressure,
+.syn-value.flow,
+.syn-value.cond,
+.syn-value.level { color: #000; }
+.syn-unit {
+    font-size: 7px;
+    color: #475569;
+    font-weight: 600;
+    margin-left: 2px;
+}
+
+/* ─── STATUS DOT ────────────────────────────────────────── */
+.syn-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: #fff;
+    border: 1px solid #7F8C8D;
+    flex-shrink: 0;
+}
+.syn-status-dot.on  { background: #475569; box-shadow: inset 1px 1px 2px rgba(0,0,0,0.4); }
+.syn-status-dot.off { background: #fff; }
+.syn-status-dot.warn { background: #BAC3C7; animation: blink 0.8s ease-in-out infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ─── TANK (vertical level bar) ─────────────────────────── */
+.tank-shell {
+    width: 44px; height: 60px;
+    border: 1px solid #7F8C8D;
+    border-radius: 2px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.3);
+}
+/* Taller variant for Cuve Perméat */
+.tank-shell--tall {
+    width: 44px; height: 100px;
+}
+.tank-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #BAC3C7;
+    border-top: 1px solid #7F8C8D;
+    transition: height 0.5s ease;
+}
+.tank-fill.low  { background: #96A0A5; }
+.tank-fill.high { background: #475569; }
+.tank-pct {
+    position: absolute;
+    width: 100%; text-align: center;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 9px; font-weight: 700; color: #000;
+    text-shadow: 0 0 3px rgba(255,255,255,0.9);
+    bottom: 2px; z-index: 1;
+}
+
+/* ─── CYLINDER (sand/cartridge filters) ─────────────────── */
+.syn-cylinder-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 3px auto;
+    width: 32px;
+}
+.syn-cyl-cap {
+    width: 32px; height: 7px;
+    background: #96A0A5;
+    border: 1px solid #7F8C8D;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.syn-cyl-tube {
+    width: 26px; min-height: 38px;
+    background: linear-gradient(to right, #C2CBD0 0%, #DFE4E6 40%, #BAC3C7 70%, #96A0A5 100%);
+    border: 1px solid #7F8C8D;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* ─── MEMBRANE / RO TUBE ────────────────────────────────── */
+.syn-box--membrane {
+    background: #C2CBD0;
+    border-color: #475569;
+}
+.syn-membrane-tube {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 3px 0;
+    height: 28px;
+}
+.syn-tube-body {
+    flex: 1;
+    height: 22px;
+    background: linear-gradient(to bottom, #96A0A5 0%, #DFE4E6 30%, #BAC3C7 60%, #7F8C8D 100%);
+    border: 1px solid #7F8C8D;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+.syn-pump-icon {
+    width: 24px; height: 24px;
+    background: #BAC3C7;
+    border: 1px solid #7F8C8D;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #334155;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.5),
+                inset -1px -1px 2px rgba(0,0,0,0.2);
+}
+.syn-box--membrane.active-running .syn-pump-icon i {
+    animation: spin 1.2s linear infinite;
+}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ─── GAUGE BOX ──────────────────────────────────────────── */
+.syn-box--gauge {
+    min-width: 68px;
+    text-align: center;
+    border-radius: 2px;
+}
+.syn-box--gauge .syn-value {
+    font-size: 13px;
+}
+
+/* ─── VALVE BOX ──────────────────────────────────────────── */
+.syn-box--valve {
+    min-width: 50px;
+    text-align: center;
+}
+.syn-valve-body {
+    width: 22px; height: 22px;
+    margin: 4px auto 2px;
+    background: #96A0A5;
+    border: 1px solid #7F8C8D;
+    clip-path: polygon(50% 0%, 100% 40%, 70% 40%, 70% 60%, 100% 60%, 50% 100%, 0% 60%, 30% 60%, 30% 40%, 0% 40%);
+    display: flex; align-items: center; justify-content: center;
+}
+.syn-valve-body.open { background: #475569; }
+
+/* ─── ΔP BAR ─────────────────────────────────────────────── */
+.dp-bar-bg {
+    background: #fff;
+    height: 6px;
+    border-radius: 2px;
+    overflow: hidden;
+    border: 1px solid #7F8C8D;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
+}
+.dp-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s;
+    background: #475569;
+}
+.dp-bar-fill.warn { background: #7F8C8D; }
+.dp-bar-fill.crit { background: #000; }
+
+#interactive-hp-pump-wrapper {
+    z-index: 50 !important;
+}
+
+/* ─── STATION STATUS BANNER ─────────────────────────────── */
+.syn-station-status {
+    border: 2px solid #475569;
+    background: #C2CBD0;
+    border-radius: 2px;
+    padding: 4px 14px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #334155;
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,0.5);
+}
+.syn-station-status.alarm {
+    border-color: #000;
+    background: #7F8C8D;
+    color: #fff;
+    animation: alarm-pulse 1s ease-in-out infinite alternate;
+}
+.syn-station-status.running {
+    border-color: #334155;
+    background: #BAC3C7;
+    color: #000;
+}
+
+/* ─── ALARM BOX ─────────────────────────────────────────── */
+.syn-box--alarm {
+    background: #C2CBD0;
+    border-color: #7F8C8D;
+    cursor: pointer;
+    padding: 6px 12px;
+}
+.syn-box--alarm.alarm-active {
+    background: #7F8C8D;
+    border-color: #000;
+    color: #fff;
+    animation: alarm-pulse 0.7s ease-in-out infinite alternate;
+}
+
+/* ─── MODE INDICATOR ─────────────────────────────────────── */
+.syn-box--mode { background: #C2CBD0; }
+.syn-mode-indicator {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #334155;
+}
+
+/* ─── START BUTTON ───────────────────────────────────────── */
+.syn-btn-start {
+    background: #96A0A5;
+    border: 2px solid #475569;
+    border-radius: 2px;
+    color: #000;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 1px 1px 0 rgba(255,255,255,0.6) inset,
+                -1px -1px 0 rgba(0,0,0,0.2) inset;
+    transition: filter 0.1s;
+}
+.syn-btn-start:hover { filter: brightness(1.08); }
+.syn-btn-start:active { box-shadow: inset 2px 2px 4px rgba(0,0,0,0.4); }
+.syn-btn-start.running {
+    background: #475569;
+    border-color: #334155;
+    color: #fff;
+}
+
+/* ─── WINCC BUTTON (contre-lavage etc.) ─────────────────── */
+.wincc-btn {
+    display: block;
+    width: 100%;
+    background: #96A0A5;
+    border: 1px solid #7F8C8D;
+    color: #000;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 7px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 4px;
+    box-shadow: 1px 1px 0 rgba(255,255,255,0.5) inset,
+                -1px -1px 0 rgba(0,0,0,0.2) inset;
+    transition: filter 0.1s;
+    text-align: center;
+}
+.wincc-btn:hover { filter: brightness(1.08); }
+.wincc-btn:active { box-shadow: inset 1px 1px 3px rgba(0,0,0,0.4); }
+
+/* ─── DETAIL PANEL (right drawer) ─────────────────────── */
+#detail-panel {
+    position: fixed; top: 0; right: -420px;
+    width: 420px; height: 100vh;
+    background: #DFE4E6;
+    border-left: 2px solid #7F8C8D;
+    z-index: 1000;
+    transition: right 0.25s ease;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+}
+#detail-panel.open { right: 0; }
+.panel-header {
+    background: #BAC3C7; color: #000;
+    padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid #7F8C8D;
+    flex-shrink: 0;
+}
+.panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+.panel-body::-webkit-scrollbar { width: 12px; }
+.panel-body::-webkit-scrollbar-track { background: #BAC3C7; border-left: 1px solid #96A0A5; }
+.panel-body::-webkit-scrollbar-thumb { background: #C2CBD0; border: 2px solid #BAC3C7; box-shadow: 1px 1px 0 #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }
+
+.param-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 4px; background: #fff; border: 1px solid #7F8C8D; border-radius: 2px; box-shadow: inset 1px 1px 2px rgba(0,0,0,0.1); }
+.param-name { font-size: 10px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.param-value { font-family: 'Roboto Mono', monospace; font-size: 13px; font-weight: 700; color: #000; }
+.param-unit { font-size: 9px; color: #475569; margin-left: 3px; }
+.param-value.bool-true  { color: #000; font-weight: 900; }
+.param-value.bool-false { color: #7F8C8D; }
+.section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #7F8C8D; }
+
+/* ─── MODALS ────────────────────────────────────────────── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900; display: none; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal-box { background: #DFE4E6; border: 2px solid #7F8C8D; border-radius: 2px; width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: 1px 1px 0 #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }
+
+/* ─── LOG TABLE ──────────────────────────────────────────── */
+.log-row-even { background: #fff; color: #000; }
+.log-row-odd  { background: #DFE4E6; color: #000; }
+.log-row-err  { background: #7F8C8D; color: #fff; font-weight: 700; }
+.log-row-warn { background: #BAC3C7; color: #000; font-weight: 700; }
+
+/* ─── FORCE VFD TO OVERRIDE THE CANVAS OVERLAY ─── */
+/* ─── WORKSPACE LAYOUT FIX FOR VFD CONSOLE ─── */
+/* ─── WORKSPACE LAYOUT FIX FOR VFD CONSOLE ─── */
+#view-vfd:not(.hidden) {
+    display: block !important;
+    position: absolute !important;
+    /* Pins it over the canvas workspace while leaving room for standard sidebar layouts on the left */
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important; /* Prevents it from crushing the left sidebar */
+    width: calc(100% - 240px) !important; /* Adjust 240px to match your sidebar's exact width if needed */
+    height: 100% !important;
+    z-index: 9999 !important; /* Keeps it strictly above the SVG pipe lines */
+    background-color: #1a1f29 !important;
+}

@@ -1,0 +1,509 @@
+{# main/templates/components/view_engineering.html #}
+{# ══════════════════════════════════════════════════════════════════════════════
+   Engineering Controls — restricted maintenance zone.
+
+   Scope in this version (per project decision):
+     1. Calibration Offsets   — per-instrument zero/span trim, keyed by the
+        same component_id groups already used in synoptic.js's _panelConfig
+        (instruments / sand_filter / cartridge_filters / hp_pump), so this
+        is consistent with tag naming already live in the codebase.
+     2. PLC Comms Config      — IP + rack/slot, matching routes/telemetry.py's
+        /api/connect payload shape ({ "ip": ... }) and tags_config.py's
+        area-based tag model.
+     3. VFD Connection Settings — COM port / baud / slave address, matching
+        modules/vfd/vfd_routes.py's /api/connect payload shape
+        ({ "port": ..., "baud_rate": ..., "slave_address": ... }).
+
+   Not included yet (next pass, per project decision):
+     - WhatsApp alarm number list (alarm_engine.py's NUMBERS)
+     - Manual override triggers
+
+   Wiring:
+     - This view is shown/hidden by SynopticHMI.showView('engineering'),
+       same mechanism as every other tab (see tab_bar.html).
+     - Save buttons call EngineeringPanel.* methods (defined inline below,
+       mirroring the pattern of HmiApp.triggerWrite / HmiCommsService used
+       elsewhere) — wire the fetch() bodies to your real endpoints once
+       they exist; the payload shapes already match your existing
+       /api/connect conventions so the backend side should be a thin
+       wrapper, not a redesign.
+   ══════════════════════════════════════════════════════════════════════ #}
+
+<main id="view-engineering" class="hidden w-full flex-grow flex-col overflow-y-auto bg-[#DFE4E6] src-view-component">
+
+    <div class="flex items-center justify-between px-4 py-2 bg-[#BAC3C7] border-b border-[#7F8C8D] sticky top-0 z-10">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-gears text-amber-700"></i>
+            <span class="text-xs font-bold uppercase tracking-wider text-[#334155]">Engineering Controls — Zone Restreinte</span>
+        </div>
+        <div id="eng-save-status" class="text-[10px] font-mono text-[#475569]">—</div>
+    </div>
+
+    <div class="p-4 flex flex-col gap-5 max-w-4xl mx-auto w-full">
+
+        <!-- ═══════════════════════════════════════════════════════════
+             SECTION 1 — CALIBRATION OFFSETS
+             ═══════════════════════════════════════════════════════════ -->
+        <section class="syn-box" style="padding:0; overflow:hidden;">
+            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                <span class="section-title" style="margin:0; border-bottom:none;">Offsets d'Étalonnage</span>
+                <span class="text-[9px] text-[#475569] font-mono">tags_config.py — PLC_TAGS</span>
+            </div>
+
+            <div class="p-3 grid grid-cols-1 md:grid-cols-2 gap-3" id="eng-calib-grid">
+
+                {# Instrumentation — pressures #}
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_in_filter — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_in_filter"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_out_filter — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_out_filter"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_out_5u — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_out_5u"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_out_1u — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_out_1u"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_hp_pump_out — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_hp_pump_out"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_reject — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_reject"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-p_permeat — Offset (Bar)</span>
+                    <input type="number" step="0.01" id="calib-instruments-p_permeat"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                {# Flow #}
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-flow_permeat — Offset (m³/h)</span>
+                    <input type="number" step="0.01" id="calib-instruments-flow_permeat"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-flow_concentrat — Offset (m³/h)</span>
+                    <input type="number" step="0.01" id="calib-instruments-flow_concentrat"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.00" placeholder="0.00">
+                </div>
+
+                {# Conductivity #}
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-cond_permeat — Offset (µS/cm)</span>
+                    <input type="number" step="0.1" id="calib-instruments-cond_permeat"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.0" placeholder="0.0">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">instruments-cond_mix — Offset (µS/cm)</span>
+                    <input type="number" step="0.1" id="calib-instruments-cond_mix"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.0" placeholder="0.0">
+                </div>
+
+                {# Sand filter backwash threshold (already a real tag: sand_filter-dp_max) #}
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">sand_filter-dp_max — Seuil ΔP Contre-Lavage (Bar)</span>
+                    <input type="number" step="0.01" id="calib-sand_filter-dp_max"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0.50" placeholder="0.50">
+                </div>
+
+                {# HP pump max pressure trip (already a real tag: hp_pump-p_max) #}
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">hp_pump-p_max — Seuil P Max Admissible (Bar)</span>
+                    <input type="number" step="0.1" id="calib-hp_pump-p_max"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="16.0" placeholder="16.0">
+                </div>
+            </div>
+
+            <div class="px-3 pb-3 flex justify-end gap-2">
+                <button onclick="EngineeringPanel.resetCalibration()"
+                        class="wincc-btn" style="background:#C2CBD0; width:auto; padding:5px 14px;">
+                    Réinitialiser
+                </button>
+                <button onclick="EngineeringPanel.saveCalibration()"
+                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
+                    Enregistrer Étalonnage
+                </button>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             SECTION 2 — PLC COMMS CONFIG (IP / SLOT)
+             ═══════════════════════════════════════════════════════════ -->
+        <section class="syn-box" style="padding:0; overflow:hidden;">
+            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                <span class="section-title" style="margin:0; border-bottom:none;">Configuration Communication PLC</span>
+                <span class="text-[9px] text-[#475569] font-mono">routes/telemetry.py — /api/connect</span>
+            </div>
+
+            <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Adresse IP (ip)</span>
+                    <input type="text" id="plc-ip" inputmode="decimal"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="192.168.1.10" placeholder="192.168.1.10">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Rack</span>
+                    <input type="number" id="plc-rack" min="0" max="7"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="0" placeholder="0">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Slot</span>
+                    <input type="number" id="plc-slot" min="0" max="31"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="1" placeholder="1">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Cycle de Scrutation (ms)</span>
+                    <input type="number" id="plc-poll-interval" min="100" step="50"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="500" placeholder="500">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Timeout Connexion (ms)</span>
+                    <input type="number" id="plc-timeout" min="500" step="100"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="2000" placeholder="2000">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">État Connexion</span>
+                    <div class="flex items-center gap-2 px-2 py-1">
+                        <span id="plc-status-dot" class="syn-status-dot off"></span>
+                        <span id="plc-status-text" class="font-mono text-xs text-[#475569]">Déconnecté</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-3 pb-3 flex justify-end gap-2">
+                <button onclick="EngineeringPanel.testPlcConnection()"
+                        class="wincc-btn" style="background:#1D4ED8; border-color:#1E3A8A; color:#fff; width:auto; padding:5px 14px;">
+                    Tester Connexion
+                </button>
+                <button onclick="EngineeringPanel.savePlcConfig()"
+                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
+                    Enregistrer
+                </button>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             SECTION 3 — VFD CONNECTION SETTINGS
+             ═══════════════════════════════════════════════════════════ -->
+        <section class="syn-box" style="padding:0; overflow:hidden;">
+            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                <span class="section-title" style="margin:0; border-bottom:none;">Configuration Liaison VFD (Veichi AC10)</span>
+                <span class="text-[9px] text-[#475569] font-mono">modules/vfd/vfd_routes.py — /api/connect</span>
+            </div>
+
+            <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Port Série (port)</span>
+                    <input type="text" id="vfd-port"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="COM3" placeholder="COM3">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Vitesse (baud_rate)</span>
+                    <select id="vfd-baud-rate"
+                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
+                        <option value="9600">9600</option>
+                        <option value="19200" selected>19200</option>
+                        <option value="38400">38400</option>
+                        <option value="57600">57600</option>
+                        <option value="115200">115200</option>
+                    </select>
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Adresse Esclave (slave_address)</span>
+                    <input type="number" id="vfd-slave-address" min="1" max="247"
+                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
+                           value="1" placeholder="1">
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Parité</span>
+                    <select id="vfd-parity"
+                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
+                        <option value="N" selected>Aucune (N)</option>
+                        <option value="E">Paire (E)</option>
+                        <option value="O">Impaire (O)</option>
+                    </select>
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Bits de Données</span>
+                    <select id="vfd-data-bits"
+                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
+                        <option value="8" selected>8</option>
+                        <option value="7">7</option>
+                    </select>
+                </div>
+
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">État Liaison</span>
+                    <div class="flex items-center gap-2 px-2 py-1">
+                        <span id="vfd-status-dot" class="syn-status-dot off"></span>
+                        <span id="vfd-status-text" class="font-mono text-xs text-[#475569]">Hors Ligne</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-3 pb-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Compteur TX (_tx_count)</span>
+                    <span id="vfd-tx-count" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
+                </div>
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Compteur RX (_rx_count)</span>
+                    <span id="vfd-rx-count" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
+                </div>
+                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+                    <span class="param-name">Erreurs CRC (_crc_errors)</span>
+                    <span id="vfd-crc-errors" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
+                </div>
+            </div>
+
+            <div class="px-3 pb-3 flex justify-end gap-2">
+                <button onclick="EngineeringPanel.testVfdConnection()"
+                        class="wincc-btn" style="background:#1D4ED8; border-color:#1E3A8A; color:#fff; width:auto; padding:5px 14px;">
+                    Tester Liaison
+                </button>
+                <button onclick="EngineeringPanel.saveVfdConfig()"
+                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
+                    Enregistrer
+                </button>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+<script>
+
+class EngineeringPanelController {
+
+    constructor() {
+        this._calibKeys = [
+            'instruments-p_in_filter', 'instruments-p_out_filter',
+            'instruments-p_out_5u', 'instruments-p_out_1u',
+            'instruments-p_hp_pump_out', 'instruments-p_reject',
+            'instruments-p_permeat', 'instruments-flow_permeat',
+            'instruments-flow_concentrat', 'instruments-cond_permeat',
+            'instruments-cond_mix', 'sand_filter-dp_max', 'hp_pump-p_max'
+        ];
+    }
+
+    _setStatus(msg, isError = false) {
+        const el = document.getElementById('eng-save-status');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = isError ? '#C84040' : '#475569';
+    }
+
+    // ── CALIBRATION ──────────────────────────────────────────────────
+    async saveCalibration() {
+        const offsets = {};
+        for (const key of this._calibKeys) {
+            const el = document.getElementById(`calib-${key}`);
+            if (el) offsets[key] = parseFloat(el.value || 0);
+        }
+        this._setStatus('Enregistrement étalonnage…');
+        try {
+            const res = await fetch('/api/engineering/calibration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ offsets })
+            });
+            const data = await res.json();
+            this._setStatus(
+                (data.status === 'success' || data.success)
+                    ? 'Étalonnage enregistré.'
+                    : `Erreur: ${data.message || data.msg || 'inconnue'}`,
+                !(data.status === 'success' || data.success)
+            );
+        } catch (e) {
+            this._setStatus(`Échec réseau: ${e.message}`, true);
+        }
+    }
+
+    resetCalibration() {
+        for (const key of this._calibKeys) {
+            const el = document.getElementById(`calib-${key}`);
+            if (el) el.value = key.includes('dp_max') ? '0.50' : (key.includes('p_max') ? '16.0' : '0.00');
+        }
+        this._setStatus('Offsets réinitialisés (non enregistré).');
+    }
+
+    // ── PLC COMMS ─────────────────────────────────────────────────────
+    async savePlcConfig() {
+        const payload = {
+            ip: document.getElementById('plc-ip').value,
+            rack: parseInt(document.getElementById('plc-rack').value || 0),
+            slot: parseInt(document.getElementById('plc-slot').value || 1),
+            poll_interval_ms: parseInt(document.getElementById('plc-poll-interval').value || 500),
+            timeout_ms: parseInt(document.getElementById('plc-timeout').value || 2000),
+        };
+        this._setStatus('Enregistrement config PLC…');
+        try {
+            const res = await fetch('/api/update-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            this._setStatus(
+                (data.status === 'success' || data.success)
+                    ? 'Configuration PLC enregistrée.'
+                    : `Erreur: ${data.message || data.msg || 'inconnue'}`,
+                !(data.status === 'success' || data.success)
+            );
+        } catch (e) {
+            this._setStatus(`Échec réseau: ${e.message}`, true);
+        }
+    }
+
+    async testPlcConnection() {
+        const ip = document.getElementById('plc-ip').value;
+        this._setStatus(`Test connexion PLC ${ip}…`);
+        const dot = document.getElementById('plc-status-dot');
+        const txt = document.getElementById('plc-status-text');
+        try {
+            const res = await fetch('/api/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip })
+            });
+            const data = await res.json();
+            const ok = (data.status === 'success' || data.success);
+            if (dot) dot.className = `syn-status-dot ${ok ? 'on' : 'warn'}`;
+            if (txt) txt.textContent = ok ? 'Connecté' : 'Échec';
+            this._setStatus(ok ? `Connecté à ${ip}.` : `Échec: ${data.message || data.msg}`, !ok);
+        } catch (e) {
+            if (dot) dot.className = 'syn-status-dot warn';
+            if (txt) txt.textContent = 'Erreur';
+            this._setStatus(`Échec réseau: ${e.message}`, true);
+        }
+    }
+
+    // ── VFD CONNECTION ────────────────────────────────────────────────
+    async saveVfdConfig() {
+        const payload = {
+            port: document.getElementById('vfd-port').value,
+            baud_rate: parseInt(document.getElementById('vfd-baud-rate').value),
+            slave_address: parseInt(document.getElementById('vfd-slave-address').value),
+            parity: document.getElementById('vfd-parity').value,
+            data_bits: parseInt(document.getElementById('vfd-data-bits').value),
+        };
+        this._setStatus('Enregistrement config VFD…');
+        try {
+            // Real endpoint is the bare /api/update-settings (not namespaced under
+            // /api/vfd/ — vfd_routes.py never renamed this one, only the two that
+            // actually collided with telemetry.py). Response shape is {success, msg}.
+            const res = await fetch('/api/update-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const ok = !!data.success;
+            this._setStatus(ok ? 'Configuration VFD enregistrée.' : `Erreur: ${data.msg || 'inconnue'}`, !ok);
+        } catch (e) {
+            this._setStatus(`Échec réseau: ${e.message}`, true);
+        }
+    }
+
+    async testVfdConnection() {
+        const payload = {
+            port: document.getElementById('vfd-port').value,
+            baud_rate: parseInt(document.getElementById('vfd-baud-rate').value),
+            slave_address: parseInt(document.getElementById('vfd-slave-address').value),
+        };
+        this._setStatus(`Test liaison VFD ${payload.port}…`);
+        const dot = document.getElementById('vfd-status-dot');
+        const txt = document.getElementById('vfd-status-text');
+        try {
+            // Real endpoint is /api/vfd-connect (hyphenated, not /api/vfd/connect —
+            // renamed in vfd_routes.py to resolve Issue #0's route collision with
+            // routes/telemetry.py's /api/connect).
+            const res = await fetch('/api/vfd-connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            // vfd_routes.py's /api/vfd-connect responds with {success, active, msg}
+            // — no "status" key on this one, unlike most other VFD endpoints.
+            const ok = !!data.success;
+            if (dot) dot.className = `syn-status-dot ${ok ? 'on' : 'warn'}`;
+            if (txt) txt.textContent = ok ? 'En Ligne' : 'Échec';
+            this._setStatus(ok ? `Liaison VFD établie sur ${payload.port}.` : `Échec: ${data.msg}`, !ok);
+            if (ok) this._refreshVfdCounters();
+        } catch (e) {
+            if (dot) dot.className = 'syn-status-dot warn';
+            if (txt) txt.textContent = 'Erreur';
+            this._setStatus(`Échec réseau: ${e.message}`, true);
+        }
+    }
+
+    async _refreshVfdCounters() {
+        try {
+            // Real keys on the /api/vfd/status response are tx / rx / crc_errors
+            // (no underscore prefix, no _count suffix — that naming only exists
+            // on the Python-side module globals, not in the JSON it returns).
+            const res = await fetch('/api/vfd/status');
+            const data = await res.json();
+            const tx = document.getElementById('vfd-tx-count');
+            const rx = document.getElementById('vfd-rx-count');
+            const crc = document.getElementById('vfd-crc-errors');
+            if (tx)  tx.textContent  = data.tx         ?? '—';
+            if (rx)  rx.textContent  = data.rx         ?? '—';
+            if (crc) crc.textContent = data.crc_errors ?? '—';
+        } catch (e) { /* non-critical, leave dashes */ }
+    }
+}
+
+const EngineeringPanel = new EngineeringPanelController();
+</script>

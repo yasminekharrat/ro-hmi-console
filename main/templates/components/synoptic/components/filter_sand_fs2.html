@@ -1,0 +1,35 @@
+<!-- ── FILTRE SABLE FS2 ────────────────────────────────────────── -->
+<div class="syn-block syn-cylinder" id="syn-fs2" style="left:87%;top:12%"
+     onclick="SynopticHMI.openPanel('sand_filter','Filtre Sable FS2')">
+    <div class="syn-box syn-box--cylinder" style="min-width:60px;text-align:center">
+
+        <div class="syn-label">FS2</div>
+
+        <div class="syn-cylinder-body">
+            <div class="syn-cyl-cap"></div>
+            <div class="syn-cyl-tube">
+                <span class="syn-status-dot" id="dot-fs2"></span>
+            </div>
+            <div class="syn-cyl-cap"></div>
+        </div>
+
+        <div style="font-size:7px;color:#475569;margin-top:2px" id="bw-state-fs2">Filtration</div>
+
+        <div class="mt-1">
+            <div style="font-size:7px;color:#475569">ΔP</div>
+            <div class="syn-value" style="font-size:10px" id="syn-val-dp-fs2">
+                --<span class="syn-unit">B</span>
+            </div>
+        </div>
+
+        <div class="dp-bar-bg mt-1">
+            <div class="dp-bar-fill" id="dp-bar-fs2" style="width:0%"></div>
+        </div>
+
+        <button onclick="event.stopPropagation();
+                         document.getElementById('backwash-modal').classList.add('open')"
+                class="wincc-btn mt-1.5 w-full" style="font-size:7px">
+            <i class="fa-solid fa-arrows-rotate mr-0.5"></i>C-Lavage
+        </button>
+    </div>
+</div>

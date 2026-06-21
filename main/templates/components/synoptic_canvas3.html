@@ -1,0 +1,766 @@
+
+<style>
+  :root {
+    --bg: #D2D8DA;
+    --panel: #C4CDD0;
+    --panel-dark: #B0BBC0;
+    --border: #7F8C8D;
+    --border-dark: #5A6A70;
+    --text-primary: #1a1a1a;
+    --text-muted: #4A5568;
+    --text-label: #334155;
+    --pipe-main: #5A6A70;
+    --pipe-product: #3B7A8C;
+    --pipe-reject: #8C5A3B;
+    --running: #2E4057;
+    --alarm-bg: #5A6A70;
+    --status-run: #2E4057;
+    --status-ok: #3B5A3B;
+    --font-mono: 'Roboto Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #3E4245;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .hmi-frame {
+    width: 100%;
+    max-width: 1060px;
+    background: #3E4245;
+    border: 3px solid #52575A;
+    border-radius: 6px;
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .hmi-brand {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #8A9195;
+    padding: 0 2px 4px;
+  }
+  .hmi-brand span { color: #00AAAA; font-weight: 900; }
+
+  .hmi-screen {
+    background: var(--bg);
+    border: 2px inset #1C2022;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header bar */
+  .hmi-header {
+    background: #2E3438;
+    color: #B1B7BC;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 10px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    flex-shrink: 0;
+    border-bottom: 1px solid #1C2022;
+  }
+  .conn-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #3B7A3B; border: 1px solid #2A5A2A;
+    display: inline-block; margin-right: 4px;
+    box-shadow: 0 0 3px #3B7A3B;
+  }
+  .hmi-clock { font-family: var(--font-mono); font-size: 9px; color: #7A8890; }
+
+  /* Tab bar */
+  .hmi-tabs {
+    display: flex;
+    gap: 0;
+    background: #1C2022;
+    flex-shrink: 0;
+    border-bottom: 2px solid #1C2022;
+  }
+  .tab {
+    padding: 4px 16px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7A8890;
+    cursor: pointer;
+    border-right: 1px solid #2E3438;
+    user-select: none;
+    transition: background 0.1s;
+  }
+  .tab.active {
+    background: var(--bg);
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--bg);
+    margin-bottom: -2px;
+  }
+  .tab:hover:not(.active) { background: #2E3438; color: #B1B7BC; }
+
+  /* ── SYNOPTIC CANVAS ── */
+  .synoptic-main {
+    flex: 1;
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
+    min-height: 520px;
+  }
+
+  /* SVG takes up full canvas */
+  .synoptic-main svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+
+  /* KPI strip at the bottom */
+  .kpi-strip {
+    background: #2E3438;
+    display: flex;
+    gap: 0;
+    border-top: 1px solid #1C2022;
+    flex-shrink: 0;
+  }
+  .kpi {
+    flex: 1;
+    padding: 4px 8px;
+    border-right: 1px solid #1C2022;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .kpi:last-child { border-right: none; }
+  .kpi-label { font-size: 7px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #5A6A70; }
+  .kpi-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: #009999; }
+  .kpi-val.alarm { color: #C84040; animation: blink-kpi 0.8s ease-in-out infinite; }
+  .kpi-val.warn { color: #A07030; }
+  .kpi-unit { font-size: 7px; color: #5A6A70; }
+
+  /* Footer bar */
+  .hmi-footer {
+    background: #1C2022;
+    color: #5A6A70;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    display: flex;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  /* ── SVG COMPONENT STYLES (scoped inside .synoptic-main) ── */
+  .syn-box {
+    fill: var(--panel);
+    stroke: var(--border);
+    stroke-width: 0.8;
+  }
+  .syn-box-dark {
+    fill: var(--panel-dark);
+    stroke: var(--border-dark);
+    stroke-width: 0.8;
+  }
+  .syn-label {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 7.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    fill: var(--text-label);
+  }
+  .syn-id {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 6px;
+    fill: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .syn-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    fill: var(--text-primary);
+  }
+  .syn-unit {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 6.5px;
+    fill: var(--text-muted);
+  }
+  .syn-zone-label {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 7px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    fill: #8A9A9F;
+  }
+
+  /* Equipment hover */
+  .syn-equip {
+    cursor: pointer;
+    transition: filter 0.12s;
+  }
+  .syn-equip:hover .syn-box { filter: brightness(1.08); stroke: var(--border-dark); stroke-width: 1.2; }
+  .syn-equip:active { transform: scale(0.98); }
+
+  /* Running state */
+  .running-outline { stroke: #2E4057; stroke-width: 1.5; }
+  .pump-spin { animation: spin-pump 2s linear infinite; transform-origin: center; }
+
+  @keyframes spin-pump {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes alarm-blink {
+    from { fill: #7F8C8D; } to { fill: #B0BBC0; }
+  }
+  @keyframes blink-kpi {
+    0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+  }
+  @keyframes status-pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.65; }
+  }
+
+  /* Zone boundary lines */
+  .zone-sep {
+    stroke: #A8B4B8;
+    stroke-width: 0.5;
+    stroke-dasharray: 4 4;
+    opacity: 0.5;
+  }
+</style>
+
+<div class="hmi-frame">
+  <div class="hmi-brand">
+    <div><span>Thermeco</span> Industrie SIMATIC HMI</div>
+    <div>TOUCH PANEL TP1200 COMFORT</div>
+  </div>
+
+  <div class="hmi-screen">
+
+    <!-- Header -->
+    <div class="hmi-header">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="conn-dot"></span>
+        <span style="color:#009999;letter-spacing:0.05em">S7-1200 192.168.1.10</span>
+        <span style="color:#3A4A50;margin:0 4px">|</span>
+        <span>STATION EN MARCHE</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="color:#A07030;animation:status-pulse 1.5s ease-in-out infinite">⚠ 1 ALARME ACTIVE</span>
+        <span class="hmi-clock" id="hmi-clock">00:00:00</span>
+      </div>
+    </div>
+
+    
+
+    <!-- Main synoptic SVG canvas -->
+    <div class="synoptic-main">
+      <svg viewBox="0 0 1020 510" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE BOUNDARY SEPARATORS                   -->
+        <!-- ═══════════════════════════════════════════ -->
+        <line x1="215" y1="10" x2="215" y2="500" class="zone-sep"/>
+        <line x1="410" y1="10" x2="410" y2="500" class="zone-sep"/>
+        <line x1="620" y1="10" x2="620" y2="500" class="zone-sep"/>
+        <line x1="820" y1="10" x2="820" y2="500" class="zone-sep"/>
+
+        <!-- Zone labels -->
+        <text x="112" y="18" class="syn-zone-label" text-anchor="middle">Prétraitement</text>
+        <text x="312" y="18" class="syn-zone-label" text-anchor="middle">Filtration</text>
+        <text x="515" y="18" class="syn-zone-label" text-anchor="middle">Haute Pression</text>
+        <text x="720" y="18" class="syn-zone-label" text-anchor="middle">Membranes OI</text>
+        <text x="920" y="18" class="syn-zone-label" text-anchor="middle">Perméat / Produit</text>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- PIPE NETWORK (drawn first, behind equipment) -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Feed pipe: Tank → Inlet pressure gauge (main feed line, horizontal) -->
+        <line x1="94" y1="230" x2="136" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+        <!-- Down to feed pump area -->
+        <line x1="136" y1="185" x2="136" y2="275" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+        <!-- Right to sand filters -->
+        <line x1="136" y1="230" x2="230" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+
+        <!-- Sand filter 1 outlet → main header -->
+        <line x1="264" y1="160" x2="300" y2="160" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+        <line x1="300" y1="160" x2="300" y2="230" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- Sand filter 2 outlet → main header -->
+        <line x1="264" y1="295" x2="300" y2="295" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+        <line x1="300" y1="295" x2="300" y2="230" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- Header through filtration zone -->
+        <line x1="300" y1="230" x2="420" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+
+        <!-- Cartridge filters in series -->
+        <line x1="420" y1="230" x2="455" y2="230" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+        <line x1="505" y1="230" x2="535" y2="230" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- Pre-HP pressure gauge tee -->
+        <line x1="535" y1="195" x2="535" y2="265" stroke="var(--pipe-main)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="535" y1="230" x2="590" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+
+        <!-- HP Pump -->
+        <line x1="590" y1="230" x2="615" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="665" y1="230" x2="700" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+
+        <!-- Post-HP pressure gauge tee -->
+        <line x1="700" y1="195" x2="700" y2="230" stroke="var(--pipe-main)" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- Feed to RO membranes -->
+        <line x1="700" y1="230" x2="740" y2="230" stroke="var(--pipe-main)" stroke-width="3.5" stroke-linecap="round"/>
+        <!-- Split to RO1 and RO2 -->
+        <line x1="740" y1="155" x2="740" y2="305" stroke="var(--pipe-main)" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="740" y1="155" x2="765" y2="155" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+        <line x1="740" y1="305" x2="765" y2="305" stroke="var(--pipe-main)" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- RO1 permeate → product header -->
+        <line x1="865" y1="155" x2="900" y2="155" stroke="var(--pipe-product)" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="900" y1="155" x2="900" y2="240" stroke="var(--pipe-product)" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- RO2 permeate → product header -->
+        <line x1="865" y1="305" x2="900" y2="305" stroke="var(--pipe-product)" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="900" y1="305" x2="900" y2="260" stroke="var(--pipe-product)" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- Product header to permeate tank -->
+        <line x1="900" y1="250" x2="930" y2="250" stroke="var(--pipe-product)" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- RO1 reject line -->
+        <line x1="865" y1="175" x2="900" y2="175" stroke="var(--pipe-reject)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="900" y1="175" x2="900" y2="390" stroke="var(--pipe-reject)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="900" y1="390" x2="800" y2="390" stroke="var(--pipe-reject)" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- RO2 reject line -->
+        <line x1="865" y1="285" x2="890" y2="285" stroke="var(--pipe-reject)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="890" y1="285" x2="890" y2="390" stroke="var(--pipe-reject)" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- Reject pressure gauges tee -->
+        <line x1="820" y1="375" x2="820" y2="405" stroke="var(--pipe-reject)" stroke-width="1.5" stroke-linecap="round"/>
+
+        <!-- Reject to drain -->
+        <line x1="800" y1="390" x2="40" y2="390" stroke="var(--pipe-reject)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="6 3"/>
+
+        <!-- EVF valve feed -->
+        <line x1="40" y1="390" x2="40" y2="445" stroke="var(--pipe-reject)" stroke-width="1.5"/>
+        <!-- EVE valve feed from main header -->
+        <line x1="136" y1="275" x2="136" y2="390" stroke="var(--pipe-main)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="100" y1="390" x2="136" y2="390" stroke="var(--pipe-main)" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- Pipe flow direction arrows -->
+        <polygon points="222,227 214,223 214,237" fill="var(--pipe-main)" opacity="0.5"/>
+        <polygon points="392,227 384,223 384,237" fill="var(--pipe-main)" opacity="0.5"/>
+        <polygon points="582,227 574,223 574,237" fill="var(--pipe-main)" opacity="0.5"/>
+        <polygon points="732,227 724,223 724,237" fill="var(--pipe-main)" opacity="0.5"/>
+        <polygon points="922,247 918,240 918,254" fill="var(--pipe-product)" opacity="0.5"/>
+
+        <!-- Pipe legend -->
+        <line x1="630" y1="490" x2="660" y2="490" stroke="var(--pipe-main)" stroke-width="3"/>
+        <text x="663" y="493" class="syn-id">Alimentation</text>
+        <line x1="720" y1="490" x2="750" y2="490" stroke="var(--pipe-product)" stroke-width="2.5"/>
+        <text x="753" y="493" class="syn-id">Perméat</text>
+        <line x1="800" y1="490" x2="830" y2="490" stroke="var(--pipe-reject)" stroke-width="2" stroke-dasharray="4 2"/>
+        <text x="833" y="493" class="syn-id">Concentrat</text>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE 1: PRÉ-TRAITEMENT                     -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Raw water tank (T-01) -->
+        <g class="syn-equip" transform="translate(18,140)" onclick="this.dispatchEvent(new CustomEvent('detail',{bubbles:true,detail:{id:'T-01'}}))">
+          <!-- Tank shell -->
+          <rect x="0" y="0" width="52" height="80" rx="2" class="syn-box"/>
+          <!-- Water level fill ~65% -->
+          <rect x="1" y="28" width="50" height="51" rx="0" fill="#9EADB3" opacity="0.7"/>
+          <!-- Level gradient top surface -->
+          <rect x="1" y="27" width="50" height="3" fill="#7F9098" opacity="0.8"/>
+          <!-- Tank label -->
+          <text x="26" y="-6" class="syn-id" text-anchor="middle">T-01</text>
+          <text x="26" y="88" class="syn-label" text-anchor="middle" font-size="6.5px">Cuve Brute</text>
+          <!-- Level % -->
+          <text x="26" y="59" class="syn-val" text-anchor="middle" font-size="10px">65%</text>
+          <!-- Pipe stubs -->
+          <rect x="52" y="36" width="8" height="5" fill="var(--pipe-main)"/>
+        </g>
+
+        <!-- Feed pump P-00 (vertical pump symbol) -->
+        <g class="syn-equip" transform="translate(118,185)" onclick="">
+          <text x="18" y="-6" class="syn-id" text-anchor="middle">P-00</text>
+          <!-- Pump circle -->
+          <circle cx="18" cy="22" r="18" class="syn-box" stroke-width="1"/>
+          <!-- Pump triangle (running direction) -->
+          <polygon points="10,14 10,30 26,22" fill="#7F8C8D" opacity="0.8"/>
+          <!-- Pump impeller line (rotating) -->
+          <line class="pump-spin" x1="18" y1="14" x2="18" y2="30" stroke="#5A6A70" stroke-width="1.5" stroke-linecap="round" style="transform-origin:18px 22px"/>
+          <text x="18" y="50" class="syn-label" text-anchor="middle" font-size="6px">Pompe</text>
+          <text x="18" y="58" class="syn-label" text-anchor="middle" font-size="6px">Alimentation</text>
+        </g>
+
+        <!-- Inlet pressure gauge PT-01 -->
+        <g class="syn-equip" transform="translate(120,140)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-01</text>
+          <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+          <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">P INLET</text>
+          <text x="18" y="23" class="syn-val" text-anchor="middle" font-size="11px">1.2</text>
+          <text x="18" y="30" class="syn-unit" text-anchor="middle">bar</text>
+        </g>
+
+        <!-- Flow meter FT-01 -->
+        <g class="syn-equip" transform="translate(120,258)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">FT-01</text>
+          <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+          <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">Q INLET</text>
+          <text x="18" y="23" class="syn-val" text-anchor="middle" font-size="11px">4.8</text>
+          <text x="18" y="30" class="syn-unit" text-anchor="middle">m³/h</text>
+        </g>
+
+        <!-- Sand filter FS-1 -->
+        <g class="syn-equip" transform="translate(230,98)">
+          <text x="17" y="-5" class="syn-id" text-anchor="middle">FS-1</text>
+          <!-- Cylinder cap top -->
+          <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <!-- Cylinder body -->
+          <rect x="0" y="8" width="34" height="58" rx="0" class="syn-box"/>
+          <!-- Media fill lines -->
+          <line x1="4" y1="38" x2="30" y2="38" stroke="#96A0A5" stroke-width="0.5"/>
+          <line x1="4" y1="50" x2="30" y2="50" stroke="#96A0A5" stroke-width="0.5"/>
+          <!-- Cylinder cap bottom -->
+          <rect x="4" y="66" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <text x="17" y="80" class="syn-label" text-anchor="middle" font-size="6px">Filtre</text>
+          <text x="17" y="88" class="syn-label" text-anchor="middle" font-size="6px">Sable 1</text>
+          <!-- BW button -->
+          <rect x="1" y="92" width="32" height="11" rx="1" fill="#A8B4B8" stroke="#7F8C8D" stroke-width="0.5" class="syn-equip" style="cursor:pointer"/>
+          <text x="17" y="101" class="syn-label" text-anchor="middle" font-size="5.5px">CONTRE-LAV.</text>
+          <!-- Pipe stub out right -->
+          <rect x="34" y="29" width="10" height="4" fill="var(--pipe-main)"/>
+        </g>
+
+        <!-- Sand filter FS-2 -->
+        <g class="syn-equip" transform="translate(230,232)">
+          <text x="17" y="-5" class="syn-id" text-anchor="middle">FS-2</text>
+          <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <rect x="0" y="8" width="34" height="58" rx="0" class="syn-box"/>
+          <line x1="4" y1="38" x2="30" y2="38" stroke="#96A0A5" stroke-width="0.5"/>
+          <line x1="4" y1="50" x2="30" y2="50" stroke="#96A0A5" stroke-width="0.5"/>
+          <rect x="4" y="66" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <text x="17" y="80" class="syn-label" text-anchor="middle" font-size="6px">Filtre</text>
+          <text x="17" y="88" class="syn-label" text-anchor="middle" font-size="6px">Sable 2</text>
+          <rect x="1" y="92" width="32" height="11" rx="1" fill="#A8B4B8" stroke="#7F8C8D" stroke-width="0.5" class="syn-equip" style="cursor:pointer"/>
+          <text x="17" y="101" class="syn-label" text-anchor="middle" font-size="5.5px">CONTRE-LAV.</text>
+          <rect x="34" y="29" width="10" height="4" fill="var(--pipe-main)"/>
+        </g>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE 2: FILTRATION CARTOUCHES              -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Cartridge filter F-5U -->
+        <g class="syn-equip" transform="translate(430,178)">
+          <text x="17" y="-5" class="syn-id" text-anchor="middle">F-5U</text>
+          <!-- Cylinder -->
+          <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <rect x="0" y="8" width="34" height="48" rx="0" class="syn-box"/>
+          <rect x="4" y="56" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <text x="17" y="74" class="syn-label" text-anchor="middle" font-size="6px">F 5 μm</text>
+          <!-- Pipe stubs -->
+          <rect x="34" y="24" width="10" height="4" fill="var(--pipe-main)"/>
+        </g>
+
+        <!-- Cartridge filter F-1U -->
+        <g class="syn-equip" transform="translate(504,178)">
+          <text x="17" y="-5" class="syn-id" text-anchor="middle">F-1U</text>
+          <rect x="4" y="0" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <rect x="0" y="8" width="34" height="48" rx="0" class="syn-box"/>
+          <rect x="4" y="56" width="26" height="8" rx="2" class="syn-box-dark"/>
+          <text x="17" y="74" class="syn-label" text-anchor="middle" font-size="6px">F 1 μm</text>
+          <rect x="34" y="24" width="10" height="4" fill="var(--pipe-main)"/>
+        </g>
+
+        <!-- Low-pressure gauge PT-02 -->
+        <g class="syn-equip" transform="translate(430,130)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-02</text>
+          <rect x="0" y="0" width="38" height="32" rx="2" class="syn-box"/>
+          <text x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px">P BAS</text>
+          <text x="19" y="23" class="syn-val" text-anchor="middle" font-size="11px">2.1</text>
+          <text x="19" y="30" class="syn-unit" text-anchor="middle">bar</text>
+          <line x1="19" y1="32" x2="19" y2="48" stroke="#7F8C8D" stroke-width="0.8" stroke-dasharray="2 2"/>
+        </g>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE 3: HAUTE PRESSION                     -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Pre-HP pressure gauge PT-03 -->
+        <g class="syn-equip" transform="translate(518,162)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-03</text>
+          <rect x="0" y="0" width="38" height="32" rx="2" class="syn-box"/>
+          <text x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px">P PRÉ-HP</text>
+          <text x="19" y="23" class="syn-val" text-anchor="middle" font-size="11px">3.4</text>
+          <text x="19" y="30" class="syn-unit" text-anchor="middle">bar</text>
+          <line x1="19" y1="32" x2="19" y2="45" stroke="#7F8C8D" stroke-width="0.8" stroke-dasharray="2 2"/>
+        </g>
+
+        <!-- HP Pump P-01 (featured, bigger, clickable to VFD tab) -->
+        <g class="syn-equip" transform="translate(590,196)" onclick="" style="cursor:pointer">
+          <!-- Outer ring (running highlight) -->
+          <circle cx="37" cy="34" r="34" fill="#1E2830" stroke="#2E5070" stroke-width="1.5"/>
+          <!-- Inner pump symbol -->
+          <circle cx="37" cy="34" r="26" fill="#2A3540" stroke="#3A6080" stroke-width="1"/>
+          <!-- Fan blades (animated) -->
+          <g class="pump-spin" style="transform-origin:37px 34px">
+            <line x1="37" y1="14" x2="37" y2="54" stroke="#4A8AAA" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="17" y1="34" x2="57" y2="34" stroke="#4A8AAA" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="23" y1="20" x2="51" y2="48" stroke="#4A8AAA" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+            <line x1="51" y1="20" x2="23" y2="48" stroke="#4A8AAA" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+          </g>
+          <!-- Center hub -->
+          <circle cx="37" cy="34" r="5" fill="#3A6080"/>
+          <text x="37" y="-10" class="syn-id" text-anchor="middle" fill="#5A9ABF" font-size="7px">P-01 VFD</text>
+          <text x="37" y="80" class="syn-label" text-anchor="middle" fill="#4A8AAA" font-size="6.5px">POMPE HP</text>
+          <text x="37" y="90" class="syn-id" text-anchor="middle" fill="#3A6A88">→ TAB VFD</text>
+          <!-- HP gauge PT-04 above -->
+        </g>
+
+        <!-- HP discharge gauge PT-04 -->
+        <g class="syn-equip" transform="translate(682,162)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-04</text>
+          <rect x="0" y="0" width="38" height="32" rx="2" class="syn-box" stroke="#C84040" stroke-width="1"/>
+          <text x="19" y="11" class="syn-label" text-anchor="middle" font-size="6px" fill="#8C3030">P HP !</text>
+          <!-- Alarm: overpressure -->
+          <text x="19" y="23" class="syn-val" text-anchor="middle" font-size="11px" fill="#C84040">17.2</text>
+          <text x="19" y="30" class="syn-unit" text-anchor="middle">bar</text>
+          <line x1="19" y1="32" x2="19" y2="45" stroke="#C84040" stroke-width="0.8" stroke-dasharray="2 2"/>
+        </g>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE 4: MEMBRANES OI                       -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- RO membrane vessel 1 (RO-1) -->
+        <g class="syn-equip" transform="translate(762,110)">
+          <text x="52" y="-5" class="syn-id" text-anchor="middle">RO-1</text>
+          <!-- Membrane vessel: elongated pressure tube -->
+          <rect x="0" y="12" width="100" height="36" rx="4" class="syn-box"/>
+          <!-- End caps -->
+          <rect x="0" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+          <rect x="86" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+          <!-- Membrane elements inside -->
+          <rect x="16" y="16" width="22" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <rect x="40" y="16" width="22" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <rect x="64" y="16" width="20" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <!-- Center product tube -->
+          <line x1="0" y1="30" x2="100" y2="30" stroke="#5A7A8A" stroke-width="1" stroke-dasharray="3 2"/>
+          <!-- pump mini icon -->
+          <circle cx="50" cy="30" r="8" fill="#A0AEBB" stroke="#7A8A90" stroke-width="0.5"/>
+          <text x="50" y="32" class="syn-label" text-anchor="middle" font-size="5px">RO</text>
+          <!-- Permeate outlet (right) -->
+          <rect x="100" y="18" width="8" height="4" fill="var(--pipe-product)"/>
+          <!-- Reject outlet (right, lower) -->
+          <rect x="100" y="35" width="8" height="3" fill="var(--pipe-reject)"/>
+          <!-- Labels -->
+          <text x="108" y="23" class="syn-id" fill="#3B7A8C" font-size="5.5px">Perméat</text>
+          <text x="108" y="39" class="syn-id" fill="#8C5A3B" font-size="5.5px">Concentrat</text>
+          <text x="52" y="66" class="syn-label" text-anchor="middle" font-size="6px">Membrane RO 1</text>
+        </g>
+
+        <!-- RO membrane vessel 2 (RO-2) -->
+        <g class="syn-equip" transform="translate(762,260)">
+          <text x="52" y="-5" class="syn-id" text-anchor="middle">RO-2</text>
+          <rect x="0" y="12" width="100" height="36" rx="4" class="syn-box"/>
+          <rect x="0" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+          <rect x="86" y="8" width="14" height="44" rx="3" class="syn-box-dark"/>
+          <rect x="16" y="16" width="22" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <rect x="40" y="16" width="22" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <rect x="64" y="16" width="20" height="28" rx="1" fill="#B0BBBf" stroke="#8A9A9F" stroke-width="0.5"/>
+          <line x1="0" y1="30" x2="100" y2="30" stroke="#5A7A8A" stroke-width="1" stroke-dasharray="3 2"/>
+          <circle cx="50" cy="30" r="8" fill="#A0AEBB" stroke="#7A8A90" stroke-width="0.5"/>
+          <text x="50" y="32" class="syn-label" text-anchor="middle" font-size="5px">RO</text>
+          <rect x="100" y="18" width="8" height="4" fill="var(--pipe-product)"/>
+          <rect x="100" y="35" width="8" height="3" fill="var(--pipe-reject)"/>
+          <text x="108" y="23" class="syn-id" fill="#3B7A8C" font-size="5.5px">Perméat</text>
+          <text x="108" y="39" class="syn-id" fill="#8C5A3B" font-size="5.5px">Concentrat</text>
+          <text x="52" y="66" class="syn-label" text-anchor="middle" font-size="6px">Membrane RO 2</text>
+        </g>
+
+        <!-- Reject gauge PT-Conc -->
+        <g class="syn-equip" transform="translate(802,358)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">PT-Rej</text>
+          <rect x="0" y="0" width="36" height="32" rx="2" class="syn-box"/>
+          <text x="18" y="11" class="syn-label" text-anchor="middle" font-size="6px">P CONC.</text>
+          <text x="18" y="23" class="syn-val" text-anchor="middle" font-size="11px">5.8</text>
+          <text x="18" y="30" class="syn-unit" text-anchor="middle">bar</text>
+        </g>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ZONE 5: PERMÉAT / PRODUIT                  -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Permeate tank T-02 -->
+        <g class="syn-equip" transform="translate(928,170)">
+          <text x="26" y="-6" class="syn-id" text-anchor="middle">T-02</text>
+          <!-- Tank shell -->
+          <rect x="0" y="0" width="52" height="100" rx="2" class="syn-box"/>
+          <!-- Water level fill ~82% -->
+          <rect x="1" y="18" width="50" height="81" rx="0" fill="#3B7A8C" opacity="0.4"/>
+          <rect x="1" y="17" width="50" height="3" fill="#3B7A8C" opacity="0.5"/>
+          <!-- Level % -->
+          <text x="26" y="72" class="syn-val" text-anchor="middle" font-size="10px">82%</text>
+          <text x="26" y="108" class="syn-label" text-anchor="middle" font-size="6.5px">Cuve Perméat</text>
+          <!-- Pipe stub left -->
+          <rect x="-8" y="76" width="8" height="4" fill="var(--pipe-product)"/>
+        </g>
+
+        <!-- Conductivity sensor CT-01 -->
+        <g class="syn-equip" transform="translate(930,310)">
+          <text x="22" y="-5" class="syn-id" text-anchor="middle">CT-01</text>
+          <rect x="0" y="0" width="44" height="36" rx="2" class="syn-box"/>
+          <text x="22" y="11" class="syn-label" text-anchor="middle" font-size="6px">CONDUCTIV.</text>
+          <text x="22" y="24" class="syn-val" text-anchor="middle" font-size="11px">245</text>
+          <text x="22" y="33" class="syn-unit" text-anchor="middle">μS/cm</text>
+        </g>
+
+        <!-- Flow meter FT-02 (permeate) -->
+        <g class="syn-equip" transform="translate(930,375)">
+          <text x="22" y="-5" class="syn-id" text-anchor="middle">FT-02</text>
+          <rect x="0" y="0" width="44" height="36" rx="2" class="syn-box"/>
+          <text x="22" y="11" class="syn-label" text-anchor="middle" font-size="6px">Q PERMÉAT</text>
+          <text x="22" y="24" class="syn-val" text-anchor="middle" font-size="11px">3.6</text>
+          <text x="22" y="33" class="syn-unit" text-anchor="middle">m³/h</text>
+        </g>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- ACTUATORS / VALVES ROW (bottom)            -->
+        <!-- ═══════════════════════════════════════════ -->
+
+        <!-- Valve EVF -->
+        <g class="syn-equip" transform="translate(22,432)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">EVF</text>
+          <!-- Valve butterfly symbol -->
+          <polygon points="18,0 36,18 18,36 0,18" fill="#C4CDD0" stroke="#7F8C8D" stroke-width="0.8"/>
+          <line x1="18" y1="0" x2="18" y2="36" stroke="#5A6A70" stroke-width="1.5"/>
+          <text x="18" y="46" class="syn-label" text-anchor="middle" font-size="5.5px">V. Chasse</text>
+        </g>
+
+        <!-- Valve EVE -->
+        <g class="syn-equip" transform="translate(82,432)">
+          <text x="18" y="-5" class="syn-id" text-anchor="middle">EVE</text>
+          <polygon points="18,0 36,18 18,36 0,18" fill="#475569" stroke="#334155" stroke-width="0.8"/>
+          <line x1="18" y1="0" x2="18" y2="36" stroke="#C4CDD0" stroke-width="1.5"/>
+          <text x="18" y="46" class="syn-label" text-anchor="middle" font-size="5.5px">V. Eau Brute</text>
+          <!-- OPEN indicator -->
+          <text x="18" y="56" class="syn-id" text-anchor="middle" fill="#2E6A2E">OUVERT</text>
+        </g>
+
+        <!-- START button -->
+        <g class="syn-equip" transform="translate(200,430)">
+          <rect x="0" y="0" width="70" height="36" rx="2" fill="#2E4057" stroke="#3A6080" stroke-width="1.2"/>
+          <text x="35" y="15" class="syn-label" text-anchor="middle" fill="#7AB0D0" font-size="7px">■ EN MARCHE</text>
+          <text x="35" y="28" class="syn-val" text-anchor="middle" fill="#4A9ACA" font-size="9px">AUTO</text>
+        </g>
+
+        <!-- ALARM button -->
+        <g class="syn-equip" transform="translate(290,430)">
+          <rect x="0" y="0" width="70" height="36" rx="2" fill="#7F8C8D" stroke="#5A6A70" stroke-width="1" style="animation:alarm-blink 0.8s ease-in-out infinite alternate"/>
+          <text x="35" y="15" class="syn-label" text-anchor="middle" fill="#fff" font-size="7px">⚠ ALARME</text>
+          <text x="35" y="28" class="syn-val" text-anchor="middle" fill="#fff" font-size="9px">PT-04 HP!</text>
+        </g>
+
+        <!-- Recovery ratio indicator -->
+        <g transform="translate(415,430)">
+          <rect x="0" y="0" width="90" height="36" rx="2" fill="#1E2830" stroke="#2E4050" stroke-width="0.8"/>
+          <text x="45" y="11" class="syn-label" text-anchor="middle" fill="#5A7A8A" font-size="6px">TAUX RÉCUPÉRATION</text>
+          <text x="45" y="28" class="syn-val" text-anchor="middle" fill="#009999" font-size="14px">75%</text>
+        </g>
+
+        <!-- Mode indicator -->
+        <g transform="translate(520,430)">
+          <rect x="0" y="0" width="80" height="36" rx="2" class="syn-box"/>
+          <text x="40" y="11" class="syn-label" text-anchor="middle" font-size="6px">MODE</text>
+          <text x="40" y="27" class="syn-val" text-anchor="middle" fill="#2E4057" font-size="11px">AUTOMATIQUE</text>
+        </g>
+
+        <!-- Station status banner (top center) -->
+        <g transform="translate(430,28)">
+          <rect x="0" y="0" width="160" height="24" rx="2" fill="#2E4057" stroke="#3A6080" stroke-width="1"/>
+          <text x="80" y="16" class="syn-label" text-anchor="middle" fill="#7AB0D0" font-size="8px" letter-spacing="0.12em">OI EN PRODUCTION</text>
+        </g>
+
+      </svg>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-label">Pression HP</div>
+        <div class="kpi-val alarm">17.2 <span class="kpi-unit">bar</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Débit Perméat</div>
+        <div class="kpi-val">3.6 <span class="kpi-unit">m³/h</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Conductivité</div>
+        <div class="kpi-val">245 <span class="kpi-unit">μS/cm</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Niveau T-01</div>
+        <div class="kpi-val">65 <span class="kpi-unit">%</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Niveau T-02</div>
+        <div class="kpi-val">82 <span class="kpi-unit">%</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Récupération</div>
+        <div class="kpi-val">75 <span class="kpi-unit">%</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Mode Marche</div>
+        <div class="kpi-val" style="font-size:10px">AUTO</div>
+      </div>
+    </div>
+
+    <div class="hmi-footer">
+      <span>Thermeco Industrie — Station OI 15 m³/h</span>
+      <span id="footer-date">Chargement...</span>
+    </div>
+
+  </div><!-- .hmi-screen -->
+</div><!-- .hmi-frame -->
+
+<script>
+function pad(n){return String(n).padStart(2,'0');}
+function tick(){
+  const now = new Date();
+  const t = pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+  const d = pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear();
+  const el = document.getElementById('hmi-clock');
+  const fd = document.getElementById('footer-date');
+  if(el) el.textContent = t;
+  if(fd) fd.textContent = d + ' ' + t;
+}
+tick();
+setInterval(tick, 1000);
+</script>

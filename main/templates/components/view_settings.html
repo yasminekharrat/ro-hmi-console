@@ -1,0 +1,86 @@
+<main id="view-settings" class="hidden flex-grow overflow-y-auto p-4 wincc-scrollbar bg-[#DFE4E6]">
+    <div class="wincc-panel bg-[#D2D7DA] p-3 border border-[#7F8C8D] rounded-sm mb-3 shadow-[inset_1px_1px_0px_#fff]">
+        <div class="text-[10px] font-bold uppercase text-slate-700 tracking-wider mb-3 border-b border-[#A2AEC2] pb-1">
+            <i class="fa-solid fa-sliders mr-1.5 text-slate-600"></i>Consignes Process — DB50
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            
+            <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Pompe HP</div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-slate-700 text-[9px] w-28">P Max admissible (Bar)</span>
+                    <input type="number" id="cfg-p-max" step="0.5" value="16" 
+                        class="flex-1 bg-white text-black border border-[#7F8C8D] px-2 py-1 plc-mono text-xs outline-none shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]">
+                </div>
+                <button onclick="HmiApp.triggerWrite(50,'26.0',parseFloat(document.getElementById('cfg-p-max').value))"
+                        class="wincc-btn w-full bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                    Appliquer P Max HP
+                </button>
+            </div>
+
+            <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Qualité Perméat</div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-slate-700 text-[9px] w-28">Cond. Max (µS/cm)</span>
+                    <input type="number" id="cfg-cond-max" step="10" value="500" 
+                        class="flex-1 bg-white text-black border border-[#7F8C8D] px-2 py-1 plc-mono text-xs outline-none shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]">
+                </div>
+                <button onclick="HmiApp.triggerWrite(50,'46.0',parseFloat(document.getElementById('cfg-cond-max').value))"
+                        class="wincc-btn w-full bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                    Appliquer Cond Max
+                </button>
+            </div>
+
+            <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Mode Opérationnel</div>
+                <div class="flex gap-2">
+                    <button onclick="HmiApp.triggerWrite(50,'44.0',true)"
+                            class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                        Mode AUTO
+                    </button>
+                    <button onclick="HmiApp.triggerWrite(50,'44.0',false)"
+                            class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                        Mode MANUEL
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-[#BAC3C7] p-3 border border-[#7F8C8D] rounded-sm">
+                <div class="text-[9px] text-slate-700 uppercase font-bold tracking-wider mb-2">Pompe Alimentation</div>
+                <div class="flex gap-2">
+                    <button onclick="HmiApp.triggerWrite(50,'20.0',true)"
+                            class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                        MARCHE
+                    </button>
+                    <button onclick="HmiApp.triggerWrite(50,'20.0',false)"
+                            class="wincc-btn flex-1 bg-[#BAC3C7] hover:bg-[#cbd3d6] text-slate-800 py-1.5 text-[9px] font-bold border border-[#7F8C8D] uppercase shadow-[1px_1px_0px_#fff_inset]">
+                        ARRÊT
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="wincc-panel bg-[#D2D7DA] p-3 rounded-sm">
+        <div class="text-[10px] font-bold uppercase text-teal-800 tracking-wider mb-3 border-b border-[#A2AEC2] pb-1">
+            <i class="fa-solid fa-bug mr-1.5 text-teal-700"></i>Diagnostic DB Dump (NetToPLCSim Debug)
+        </div>
+        <div class="flex gap-2 mb-2">
+            <div class="flex items-center gap-1">
+                <span class="text-[9px] text-slate-600 font-bold">DB:</span>
+                <input type="number" id="diag-db" value="51" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+            </div>
+            <div class="flex items-center gap-1">
+                <span class="text-[9px] text-slate-600 font-bold">Start:</span>
+                <input type="number" id="diag-start" value="0" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+            </div>
+            <div class="flex items-center gap-1">
+                <span class="text-[9px] text-slate-600 font-bold">Len:</span>
+                <input type="number" id="diag-len" value="48" class="w-14 bg-[#1B2124] text-[#00FFD5] border border-[#374151] px-1 py-0.5 plc-mono text-xs outline-none">
+            </div>
+            <button onclick="SynopticHMI.runDiagDump()" class="wincc-btn bg-[#1D4ED8] text-white px-3 py-0.5 text-[9px] font-bold border border-[#1E3A8A] uppercase">Dump</button>
+        </div>
+        <pre id="diag-output" class="bg-[#141A1C] text-[#00FFD5] p-2 text-[9px] plc-mono rounded border border-[#374151] max-h-40 overflow-auto whitespace-pre-wrap">-- Résultat dump DB ici --</pre>
+    </div>
+</main>

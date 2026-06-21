@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veichi AC10 Dedicated Control Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Tahoma', 'Arial', sans-serif; -webkit-font-smoothing: antialiased; }
+        .plc-mono  { font-family: 'Roboto Mono', monospace; }
+        .hmi-screen-inset { box-shadow: inset 2px 2px 5px rgba(0,0,0,0.35); }
+        .wincc-btn   { box-shadow:  1px  1px 0px #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }
+        .wincc-btn:active { box-shadow: -1px -1px 0px #fff inset, 1px 1px 1px rgba(0,0,0,0.4) inset; }
+        .wincc-input { box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3); }
+        .wincc-panel { border: 1px solid #7F8C8D; box-shadow: 1px 1px 2px rgba(255,255,255,0.6) inset, -1px -1px 2px rgba(0,0,0,0.15) inset; }
+        .tab-active   { background: #DCDFE1; color: #1E293B; }
+        .tab-inactive { background: #B8C2C6; color: #475569; }
+        /* Industrial Scrollbar */
+        .wincc-scrollbar::-webkit-scrollbar       { width: 12px; height: 12px; }
+        .wincc-scrollbar::-webkit-scrollbar-track  { background: #1A1A1A; border-left: 1px solid #333; }
+        .wincc-scrollbar::-webkit-scrollbar-thumb  { background: #4D555A; border: 2px solid #1A1A1A; }
+        .wincc-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748B; }
+        /* Modal overlay */
+        #param-modal, #monitor-modal, #pid-modal { backdrop-filter: blur(2px); }
+    </style>
+</head>
+<body class="bg-[#2A2B2D] text-[#111111] min-h-screen p-4 flex flex-col items-center justify-center gap-3">
+
+
+<!-- ========================================================================
+     ADVANCED PARAMETER PANEL MODAL (F01 / F12)
+     ======================================================================== -->
+<div id="param-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl bg-[#DFE4E6] border-2 border-[#1C2022] wincc-panel rounded-sm flex flex-col max-h-[90vh]">
+
+        <div class="bg-[#1E293B] text-[#00FFCC] text-[11px] font-bold uppercase tracking-widest px-3 py-2 flex justify-between items-center shrink-0">
+            <span><i class="fa-solid fa-sliders mr-2"></i>Veichi AC10 — Advanced Parameter Configuration</span>
+            <button type="button" onclick="closeParamPanel()"
+                    class="wincc-btn bg-rose-700 hover:bg-rose-600 text-white border border-rose-900 px-2 py-0.5 text-[10px] font-bold uppercase">
+                <i class="fa-solid fa-xmark mr-1"></i>Close
+            </button>
+        </div>
+
+        <div class="flex gap-0 px-3 pt-2 shrink-0 border-b border-[#7F8C8D]">
+            <button type="button" id="param-tab-f01" onclick="switchParamGroup('f01')"
+                    class="wincc-btn tab-active text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm">
+                F01 — Motor / Frequency
+            </button>
+            <button type="button" id="param-tab-f12" onclick="switchParamGroup('f12')"
+                    class="wincc-btn tab-inactive text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm ml-1">
+                F12 — RS485 / Modbus
+            </button>
+            <div class="ml-auto flex items-center gap-2 pb-1">
+                <button type="button" onclick="loadParamGroup(document.getElementById('param-tab-f01').classList.contains('tab-active') ? 'f01' : 'f12')"
+                        class="wincc-btn bg-teal-700 hover:bg-teal-800 text-white border border-teal-900 px-2 py-0.5 text-[9px] font-bold uppercase">
+                    <i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh
+                </button>
+                <span id="param-load-status" class="text-[9px] font-mono text-slate-500">—</span>
+            </div>
+        </div>
+
+        <div class="overflow-y-auto wincc-scrollbar flex-1 p-3">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-[#3A4349] text-white text-[9px] uppercase tracking-wider">
+                        <th class="px-2 py-1 font-bold">Code</th>
+                        <th class="px-2 py-1 font-bold">Parameter</th>
+                        <th class="px-2 py-1 font-bold">Current Value</th>
+                        <th class="px-2 py-1 font-bold">Write New Value</th>
+                    </tr>
+                </thead>
+                <tbody id="param-table-body" class="divide-y divide-[#BAC3C7] bg-white text-[11px]">
+                    <tr><td colspan="4" class="text-center text-slate-400 italic py-4">Open the panel to load parameters.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="bg-[#ECEFF0] border-t border-[#B8C2C6] px-3 py-1.5 text-[9px] text-slate-500 font-mono shrink-0">
+            ⚠ Changes write directly to drive EEPROM. Verify values against Veichi AC10 manual before writing. Some parameters require a drive restart to take effect.
+        </div>
+    </div>
+</div>
+
+
+<!-- ========================================================================
+     F13 PID CONTROLLER MODAL
+     ======================================================================== -->
+<div id="pid-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl bg-[#DFE4E6] border-2 border-[#1C2022] wincc-panel rounded-sm flex flex-col max-h-[90vh]">
+
+        <!-- Header -->
+        <div class="bg-[#1A2744] text-[#7DD3FC] text-[11px] font-bold uppercase tracking-widest px-3 py-2 flex justify-between items-center shrink-0">
+            <span><i class="fa-solid fa-wave-square mr-2"></i>Veichi AC10 — F13 PID Controller Configuration</span>
+            <button type="button" onclick="closePidPanel()"
+                    class="wincc-btn bg-rose-700 hover:bg-rose-600 text-white border border-rose-900 px-2 py-0.5 text-[10px] font-bold uppercase">
+                <i class="fa-solid fa-xmark mr-1"></i>Close
+            </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-0 px-3 pt-2 shrink-0 border-b border-[#7F8C8D]">
+            <button type="button" id="pid-tab-core" onclick="switchPidGroup('core')"
+                    class="wincc-btn tab-active text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm">
+                Core PID (F13.00–F13.16)
+            </button>
+            <button type="button" id="pid-tab-sleep" onclick="switchPidGroup('sleep')"
+                    class="wincc-btn tab-inactive text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm ml-1">
+                Sleep / Wake (F13.12–F13.19)
+            </button>
+            <button type="button" id="pid-tab-pump" onclick="switchPidGroup('pump')"
+                    class="wincc-btn tab-inactive text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm ml-1">
+                Multi-Pump (F13.30–F13.35)
+            </button>
+            <div class="ml-auto flex items-center gap-2 pb-1">
+                <button type="button" onclick="loadPidGroup(activePidGroup)"
+                        class="wincc-btn bg-blue-700 hover:bg-blue-800 text-white border border-blue-900 px-2 py-0.5 text-[9px] font-bold uppercase">
+                    <i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh
+                </button>
+                <span id="pid-load-status" class="text-[9px] font-mono text-slate-500">—</span>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-y-auto wincc-scrollbar flex-1 p-3">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-[#1A2744] text-[#7DD3FC] text-[9px] uppercase tracking-wider">
+                        <th class="px-2 py-1 font-bold">Code</th>
+                        <th class="px-2 py-1 font-bold">Parameter</th>
+                        <th class="px-2 py-1 font-bold">Current Value</th>
+                        <th class="px-2 py-1 font-bold">Write New Value</th>
+                    </tr>
+                </thead>
+                <tbody id="pid-table-body" class="divide-y divide-[#BAC3C7] bg-white text-[11px]">
+                    <tr><td colspan="4" class="text-center text-slate-400 italic py-4">Open the panel to load PID parameters.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="bg-[#ECEFF0] border-t border-[#B8C2C6] px-3 py-1.5 text-[9px] text-slate-500 font-mono shrink-0">
+            ⚠ PID parameters write directly to drive EEPROM. Verify Kp/Ti/Td values before enabling closed-loop control. F13.00=1 enables PID; ensure F13.02/F13.03 source channels are correct.
+        </div>
+    </div>
+</div>
+
+
+<!-- ========================================================================
+     C00 / C01 LIVE MONITOR MODAL
+     ======================================================================== -->
+<div id="monitor-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl bg-[#DFE4E6] border-2 border-[#1C2022] wincc-panel rounded-sm flex flex-col max-h-[90vh]">
+
+        <!-- Header -->
+        <div class="bg-[#1A3329] text-[#00FFCC] text-[11px] font-bold uppercase tracking-widest px-3 py-2 flex justify-between items-center shrink-0">
+            <span><i class="fa-solid fa-gauge-high mr-2"></i>Veichi AC10 — Live Register Monitor</span>
+            <button type="button" onclick="closeMonitorPanel()"
+                    class="wincc-btn bg-rose-700 hover:bg-rose-600 text-white border border-rose-900 px-2 py-0.5 text-[10px] font-bold uppercase">
+                <i class="fa-solid fa-xmark mr-1"></i>Close
+            </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-0 px-3 pt-2 shrink-0 border-b border-[#7F8C8D]">
+            <button type="button" id="mon-tab-c00" onclick="switchMonitorGroup('c00')"
+                    class="wincc-btn tab-active text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm">
+                C00 — Runtime Data
+            </button>
+            <button type="button" id="mon-tab-c01" onclick="switchMonitorGroup('c01')"
+                    class="wincc-btn tab-inactive text-[10px] uppercase tracking-wider px-3 py-1 border-t border-x border-[#7F8C8D] rounded-t-sm ml-1">
+                C01 — Fault Log
+            </button>
+            <div class="ml-auto flex items-center gap-2 pb-1">
+                <div class="flex items-center gap-1.5">
+                    <div id="mon-heartbeat" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span class="text-[9px] font-mono text-slate-500 uppercase">Live</span>
+                </div>
+                <button type="button" onclick="fetchMonitorData()"
+                        class="wincc-btn bg-[#2D4A3E] hover:bg-[#3A5F50] text-white border border-[#1A3329] px-2 py-0.5 text-[9px] font-bold uppercase">
+                    <i class="fa-solid fa-arrows-rotate mr-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-y-auto wincc-scrollbar flex-1 p-3">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-[#2D4A3E] text-[#00FFCC] text-[9px] uppercase tracking-wider">
+                        <th class="px-2 py-1.5 font-bold w-20">Code</th>
+                        <th class="px-2 py-1.5 font-bold">Parameter Name</th>
+                        <th class="px-2 py-1.5 font-bold text-right w-28">Value</th>
+                        <th class="px-2 py-1.5 font-bold w-16">Unit</th>
+                    </tr>
+                </thead>
+                <tbody id="monitor-table-body" class="divide-y divide-[#BAC3C7] bg-white text-[11px]">
+                    <tr><td colspan="4" class="text-center text-slate-400 italic py-4">Opening monitor…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-[#ECEFF0] border-t border-[#B8C2C6] px-3 py-1.5 flex justify-between items-center shrink-0">
+            <span id="monitor-status" class="text-[9px] font-mono text-slate-500">Waiting for first poll…</span>
+            <span class="text-[9px] text-slate-400">C00 polls every 1 s &nbsp;|&nbsp; C01 polls every 3 s</span>
+        </div>
+    </div>
+</div>
+<!-- /MONITOR MODAL -->
+
+
+<!-- ========================================================================
+     TOP NAV BAR
+     ======================================================================== -->
+<div class="w-full max-w-5xl bg-[#DCDFE1] border-2 border-[#1C2022] wincc-panel p-2 flex justify-between items-center rounded-sm">
+    <a href="/" class="wincc-btn bg-[#4D555A] hover:bg-[#5A646A] text-white border border-[#1C2022] px-4 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-circle-arrow-left text-teal-400 text-sm"></i> Return to Main HMI
+    </a>
+    <div class="flex items-center gap-2 px-2 flex-wrap justify-end">
+        <!-- Parameters modal button -->
+        <button type="button" onclick="openParamPanel()"
+                class="wincc-btn bg-slate-600 hover:bg-slate-700 text-white border border-slate-900 px-3 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-sliders text-teal-300 text-xs"></i> F01/F12 Params
+        </button>
+        <!-- F13 PID modal button -->
+        <button type="button" onclick="openPidPanel()"
+                class="wincc-btn bg-[#1A2744] hover:bg-[#243464] text-white border border-[#0F1A33] px-3 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-wave-square text-sky-300 text-xs"></i> F13 PID
+        </button>
+        <!-- C00/C01 monitor modal button -->
+        <button type="button" onclick="openMonitorPanel()"
+                class="wincc-btn bg-[#2D4A3E] hover:bg-[#3A5F50] text-white border border-[#1A3329] px-3 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-gauge-high text-emerald-300 text-xs"></i> C00/C01 Monitor
+        </button>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-600">
+            <i class="fa-solid fa-network-wired mr-1 text-slate-500"></i> Node Status:
+        </div>
+        <div id="nav-status-badge"
+             class="px-2.5 py-0.5 rounded-sm font-mono text-[10px] font-bold uppercase bg-rose-200 text-rose-800 border border-rose-300">
+            Offline
+        </div>
+    </div>
+</div>
+
+
+<!-- ========================================================================
+     MAIN VFD VIEW
+     ======================================================================== -->
+<div id="view-vfd" class="w-full max-w-5xl bg-[#DFE4E6] hmi-screen-inset border-2 border-[#1C2022] p-4 flex flex-col gap-4 rounded-sm">
+
+    <!-- Title bar -->
+    <div class="bg-[#4D555A] text-white p-2 border border-[#2F3437] flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div id="heartbeat-pulse" class="w-2.5 h-2.5 bg-[#EF4444] rounded-full transition-all"></div>
+            <span class="text-xs font-bold uppercase tracking-wider">Veichi AC10 Drive Management Interface</span>
+        </div>
+        <div id="bus-banner-txt" class="text-[10px] font-mono bg-[#2B3033] px-2 py-0.5 text-[#00FFCC] rounded-sm">
+            Awaiting connection initialization...
+        </div>
+    </div>
+
+    <!-- ── Row 1: 3-column grid ── -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <!-- COL 1 — COMMUNICATION SETTINGS -->
+        <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col gap-2.5">
+            <div class="bg-[#3A4349] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1">
+                <i class="fa-solid fa-gears mr-1.5"></i> Communication Settings
+            </div>
+
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 flex flex-col gap-2 rounded-sm text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-600 uppercase">Serial port:</span>
+                    <input type="text" id="cfg-port" value="COM3"
+                           class="w-24 bg-white text-center font-bold p-1 border border-[#7F8C8D] wincc-input outline-none">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-600 uppercase">Baud rate:</span>
+                    <select id="cfg-baud" class="w-24 bg-white font-bold p-0.5 border border-[#7F8C8D] wincc-input outline-none">
+                        <option value="4800">4800</option>
+                        <option value="9600" selected>9600</option>
+                        <option value="19200">19200</option>
+                        <option value="38400">38400</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-600 uppercase">Node ID:</span>
+                    <input type="number" id="cfg-address" value="1" min="1" max="247"
+                           class="w-24 bg-white text-center font-bold p-1 border border-[#7F8C8D] wincc-input outline-none">
+                </div>
+
+                <div class="flex gap-1 mt-1">
+                    <button type="button" onclick="updateVfdConnection()"
+                            class="wincc-btn bg-[#4D555A] hover:bg-[#5A646A] text-white border border-[#1C2022] w-1/2 py-1 text-[10px] font-bold uppercase">
+                        Apply
+                    </button>
+                    <button type="button" onclick="autoConnectFirstDevice()"
+                            class="wincc-btn bg-teal-700 hover:bg-teal-800 text-white border border-teal-900 w-1/2 py-1 text-[10px] font-bold uppercase">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto Link
+                    </button>
+                </div>
+                <button type="button" onclick="checkConnectionNow()"
+                        class="wincc-btn bg-[#64748B] hover:bg-[#475569] text-white border border-[#1E293B] w-full py-1 text-[10px] font-bold uppercase">
+                    <i class="fa-solid fa-plug-circle-check mr-1"></i> Check Connection
+                </button>
+            </div>
+
+            <!-- Hardware Scan -->
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 flex flex-col gap-2 rounded-sm mt-auto">
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
+                        <i class="fa-solid fa-radar mr-1 text-slate-500"></i> Network Scan
+                        <i id="scan-spinner" class="fa-solid fa-circle-notch animate-spin text-teal-600 ml-1 hidden"></i>
+                    </span>
+                </div>
+                <button type="button" onclick="runAutoHardwareScan()"
+                        class="wincc-btn bg-slate-400 hover:bg-slate-500 text-slate-900 border border-slate-600 w-full py-1 text-[10px] font-bold uppercase tracking-wider">
+                    List Connected Hardware
+                </button>
+                <div id="scan-results-box"
+                     class="bg-white border border-[#BAC3C7] rounded-sm p-1.5 min-h-[50px] max-h-[90px] overflow-y-auto font-mono text-[10px] flex flex-col gap-1">
+                    <div class="text-slate-400 italic text-center pt-2 select-none">No scan performed yet.</div>
+                </div>
+            </div>
+
+            <div id="diag-summary-txt"
+                 class="bg-[#ECEFF0] border border-[#B8C2C6] p-1.5 text-[9px] plc-mono text-slate-600 rounded-sm mt-1">
+                Active Target: <span class="font-bold text-slate-800">COM3 @ 9600</span>
+            </div>
+        </div>
+        <!-- /COL 1 -->
+
+        <!-- COL 2 — LIVE PERFORMANCE -->
+        <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col gap-3">
+            <div class="bg-[#3A4349] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1">
+                <i class="fa-solid fa-bolt mr-1"></i> VFD Live Performance
+            </div>
+
+            <!-- C00.00 — Given Frequency (Setpoint tracking) -->
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 rounded-sm">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="text-[9px] font-bold text-[#475569] uppercase tracking-wide">Given Frequency <span class="text-[8px] text-slate-400 font-mono">[C00.00]</span></div>
+                    <div class="text-[8px] font-mono text-slate-400">0x2100</div>
+                </div>
+                <div class="text-2xl font-black text-[#0F172A] plc-mono tracking-tight">
+                    <span id="vfd-given-freq">00.00</span>
+                    <span class="text-xs font-bold text-[#64748B] font-sans">Hz</span>
+                </div>
+                <div class="w-full h-1.5 bg-[#CBD5E1] mt-1.5 relative border border-[#94A3B8]">
+                    <div id="vfd-given-freq-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-[#0369A1] transition-all duration-75"></div>
+                </div>
+            </div>
+
+            <!-- C00.01 — Output Frequency -->
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 rounded-sm">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="text-[9px] font-bold text-[#475569] uppercase tracking-wide">Output Frequency <span class="text-[8px] text-slate-400 font-mono">[C00.01]</span></div>
+                    <div class="text-[8px] font-mono text-slate-400">0x2101</div>
+                </div>
+                <div class="text-2xl font-black text-[#0F172A] plc-mono tracking-tight">
+                    <span id="vfd-freq">00.00</span>
+                    <span class="text-xs font-bold text-[#64748B] font-sans">Hz</span>
+                </div>
+                <div class="w-full h-1.5 bg-[#CBD5E1] mt-1.5 relative border border-[#94A3B8]">
+                    <div id="vfd-freq-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-[#006644] transition-all duration-75"></div>
+                </div>
+            </div>
+
+            <!-- C00.02 — Output Current -->
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 rounded-sm">
+                <div class="flex justify-between items-center mb-1">
+                    <div class="text-[9px] font-bold text-[#475569] uppercase tracking-wide">Motor Current Load <span class="text-[8px] text-slate-400 font-mono">[C00.02]</span></div>
+                    <div class="text-[8px] font-mono text-slate-400">0x2102</div>
+                </div>
+                <div class="text-2xl font-black text-[#0F172A] plc-mono tracking-tight">
+                    <span id="vfd-current">0.00</span>
+                    <span class="text-xs font-bold text-[#64748B] font-sans">Amps</span>
+                </div>
+                <div class="w-full h-1.5 bg-[#CBD5E1] mt-1.5 relative border border-[#94A3B8]">
+                    <div id="vfd-current-bar" class="absolute left-0 top-0 bottom-0 w-0 bg-[#B91C1C] transition-all duration-75"></div>
+                </div>
+            </div>
+
+            <!-- Setpoint inputs -->
+            <div class="grid grid-cols-2 gap-2 mt-auto">
+
+                <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 rounded-sm flex flex-col gap-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[9px] font-bold text-[#334155] uppercase tracking-wide">Freq Setpoint</span>
+                        <span class="text-[8px] font-mono text-slate-400">[F01.09]</span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <input type="number" id="vfd-freq-input" min="0" max="600" step="0.5" value="45.0"
+                            class="w-full bg-white text-right text-xs font-bold plc-mono text-[#006644] p-1 border border-[#7F8C8D] outline-none wincc-input">
+                        <button type="button" onclick="writeSetpoint()"
+                                class="wincc-btn bg-[#4D555A] hover:bg-[#5A646A] text-white border border-[#1C2022] px-2 text-[9px] font-bold uppercase tracking-wider">
+                            Set
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 rounded-sm flex flex-col gap-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[9px] font-bold text-[#334155] uppercase tracking-wide">PID Pressure SP</span>
+                        <span class="text-[8px] font-mono text-slate-400">[F13.01]</span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <input type="number" id="vfd-pressure-input" min="0" max="100" step="0.1" value="4.0"
+                            class="w-full bg-white text-right text-xs font-bold plc-mono text-[#0284c7] p-1 border border-[#7F8C8D] outline-none wincc-input">
+                        <button type="button" onclick="writePressureSetpoint()"
+                                class="wincc-btn bg-[#4D555A] hover:bg-[#5A646A] text-white border border-[#1C2022] px-2 text-[9px] font-bold uppercase tracking-wider">
+                            Set
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <!-- /COL 2 -->
+
+        <!-- COL 3 — STATUS VOYANTS & CONTROL -->
+        <div class="wincc-panel bg-[#DCDFE1] p-3 flex flex-col gap-2">
+            <div class="bg-[#3A4349] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1">
+                <i class="fa-solid fa-circle-nodes mr-1"></i> Status Pilot Voyants
+            </div>
+
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2.5 flex items-center justify-between rounded-sm">
+                <span class="text-[10px] font-bold text-[#334155] uppercase">Inverter Active</span>
+                <div class="flex items-center gap-2">
+                    <div id="voyant-run" class="w-4 h-4 rounded-full bg-[#475569] border border-[#1E293B] shadow-[inset_0_1px_2px_rgba(255,255,255,0.2)]"></div>
+                    <span id="txt-voyant-run" class="font-bold text-xs text-[#475569] uppercase">OFFLINE</span>
+                </div>
+            </div>
+
+            <!-- PID Live Status -->
+            <div class="bg-[#1A2744] border border-[#0F1A33] p-2 rounded-sm flex flex-col gap-1.5">
+                <div class="text-[9px] font-bold text-[#7DD3FC] uppercase tracking-wide mb-0.5">
+                    <i class="fa-solid fa-wave-square mr-1"></i> PID Live Values
+                </div>
+                <div class="grid grid-cols-2 gap-1">
+                    <div class="bg-[#0F1A33] p-1.5 rounded-sm flex flex-col">
+                        <span class="text-[8px] font-bold text-slate-400 uppercase">Given</span>
+                        <span id="pid-given-live" class="plc-mono font-bold text-[#7DD3FC] text-sm">—</span>
+                        <span class="text-[8px] text-slate-500">C00.08 %</span>
+                    </div>
+                    <div class="bg-[#0F1A33] p-1.5 rounded-sm flex flex-col">
+                        <span class="text-[8px] font-bold text-slate-400 uppercase">Feedback</span>
+                        <span id="pid-feedback-live" class="plc-mono font-bold text-[#34D399] text-sm">—</span>
+                        <span class="text-[8px] text-slate-500">C00.09 %</span>
+                    </div>
+                    <div class="bg-[#0F1A33] p-1.5 rounded-sm flex flex-col">
+                        <span class="text-[8px] font-bold text-slate-400 uppercase">PID Output</span>
+                        <span id="pid-output-live" class="plc-mono font-bold text-[#FCD34D] text-sm">—</span>
+                        <span class="text-[8px] text-slate-500">C00.31</span>
+                    </div>
+                    <div class="bg-[#0F1A33] p-1.5 rounded-sm flex flex-col">
+                        <span class="text-[8px] font-bold text-slate-400 uppercase">Error</span>
+                        <span id="pid-error-live" class="plc-mono font-bold text-[#F87171] text-sm">—</span>
+                        <span class="text-[8px] text-slate-500">SP - FB</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#3A4349] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 mt-1">
+                <i class="fa-solid fa-microchip mr-1"></i> Live Parameter Verification
+            </div>
+            <div class="bg-[#ECEFF0] border border-[#B8C2C6] p-2 flex flex-col gap-1.5 rounded-sm text-[10px]">
+                <div class="flex justify-between items-center border-b border-slate-200 pb-1">
+                    <span class="text-slate-600 font-bold">F01.01 (Command Channel):</span>
+                    <span id="val-f0101" class="font-mono font-bold text-slate-500">PENDING...</span>
+                </div>
+                <div class="flex justify-between items-center pb-0.5">
+                    <span class="text-slate-600 font-bold">F01.02 (Freq Channel):</span>
+                    <span id="val-f0102" class="font-mono font-bold text-slate-500">PENDING...</span>
+                </div>
+            </div>
+
+            <div id="cfg-validation-warning"></div>
+
+            <div class="bg-[#3A4349] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 mt-1">
+                <i class="fa-solid fa-sliders mr-1"></i> Sequence Control Coils
+            </div>
+
+            <div class="flex flex-col gap-1 w-full h-full">
+                <button type="button" onclick="executeAction('FORWARD')"
+                        class="wincc-btn w-full bg-[#E2E8F0] hover:bg-[#F1F5F9] active:bg-[#10B981] border border-[#7F8C8D] font-bold text-[11px] uppercase py-1 px-3 flex items-center justify-between text-left">
+                    <span><i class="fa-solid fa-play mr-2 text-[#006644]"></i> Run Forward</span>
+                    <span class="text-[9px] text-slate-500 font-bold font-mono">[0x3000=1]</span>
+                </button>
+
+                <button type="button" onclick="executeAction('REVERSE')"
+                        class="wincc-btn w-full bg-[#E2E8F0] hover:bg-[#F1F5F9] active:bg-[#F59E0B] border border-[#7F8C8D] font-bold text-[11px] uppercase py-1 px-3 flex items-center justify-between text-left">
+                    <span><i class="fa-solid fa-arrow-rotate-left mr-2 text-amber-700"></i> Run Reverse</span>
+                    <span class="text-[9px] text-slate-500 font-bold font-mono">[0x3000=2]</span>
+                </button>
+
+                <button type="button" onclick="executeAction('STOP')"
+                        class="wincc-btn w-full bg-[#E2E8F0] hover:bg-[#F1F5F9] active:bg-[#EF4444] border border-[#7F8C8D] font-bold text-[11px] uppercase py-1.5 px-3 flex items-center justify-between mt-auto text-left">
+                    <span class="font-bold text-[#991B1B]"><i class="fa-solid fa-stop mr-2"></i> Stop Motor</span>
+                    <span class="text-[9px] text-rose-700 font-bold font-mono">[0x3000=5]</span>
+                </button>
+
+                <button type="button" onclick="executeAction('RESET')"
+                        class="wincc-btn w-full bg-[#E2E8F0] hover:bg-amber-50 border border-[#7F8C8D] font-bold text-[11px] uppercase py-1 px-3 flex items-center justify-between text-left">
+                    <span class="text-amber-700"><i class="fa-solid fa-rotate-right mr-2"></i> Fault Reset</span>
+                    <span class="text-[9px] text-slate-500 font-bold font-mono">[0x3000=7]</span>
+                </button>
+            </div>
+        </div>
+        <!-- /COL 3 -->
+
+    </div>
+    <!-- /Row 1 -->
+
+
+    <!-- ── Row 2: Quick-access panel buttons + terminal ── -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t-2 border-[#BAC3C7] pt-2">
+
+        <!-- COL 1 — QUICK PANEL ACCESS -->
+        <div class="wincc-panel bg-[#DCDFE1] p-2.5 flex flex-col gap-1.5">
+            <div class="bg-[#475569] text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 flex justify-between items-center">
+                <span><i class="fa-solid fa-circle-nodes mr-1.5"></i> Panel Access</span>
+                <span class="plc-mono text-[9px] text-emerald-400 bg-[#1E293B] px-1 rounded-sm">SYS_OK</span>
+            </div>
+
+            <button type="button" onclick="openParamPanel()"
+                    class="wincc-btn bg-[#3A4349] hover:bg-[#4D555A] text-white border border-[#1C2022] w-full py-1.5 text-[10px] font-bold uppercase tracking-wider">
+                <i class="fa-solid fa-sliders mr-1.5 text-teal-400"></i> F01 / F12 Parameters
+            </button>
+
+            <button type="button" onclick="openPidPanel()"
+                    class="wincc-btn bg-[#1A2744] hover:bg-[#243464] text-white border border-[#0F1A33] w-full py-1.5 text-[10px] font-bold uppercase tracking-wider">
+                <i class="fa-solid fa-wave-square mr-1.5 text-sky-400"></i> F13 PID Configuration
+            </button>
+
+            <button type="button" onclick="openMonitorPanel()"
+                    class="wincc-btn bg-[#2D4A3E] hover:bg-[#3A5F50] text-white border border-[#1A3329] w-full py-1.5 text-[10px] font-bold uppercase tracking-wider">
+                <i class="fa-solid fa-gauge-high mr-1.5 text-emerald-400"></i> C00 / C01 Live Monitor
+            </button>
+        </div>
+
+        <!-- COL 2+3 — TERMINAL -->
+        <div class="wincc-panel bg-[#D2D7DA] border border-[#7F8C8D] p-2.5 flex flex-col gap-2 rounded-sm md:col-span-2">
+            <div class="bg-[#1E293B] text-[#00FFCC] text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 flex justify-between items-center">
+                <span><i class="fa-solid fa-terminal mr-2"></i>Modbus-RTU Protocol Bus Analyzer</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-[8px] bg-[#334155] px-1.5 py-0.5 text-white font-mono">STATE LOG ACTIVE</span>
+                    <button type="button"
+                            onclick="document.getElementById('advanced-log-terminal').innerHTML=''"
+                            class="wincc-btn bg-rose-900 hover:bg-rose-700 text-rose-300 border border-rose-900 px-2 py-0.5 text-[9px] font-bold uppercase">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <div id="advanced-log-terminal"
+                 class="h-36 overflow-y-auto bg-black text-[#33FF33] p-2.5 font-mono text-[11px] rounded-sm wincc-input wincc-scrollbar flex flex-col gap-0.5">
+                <div class="text-slate-500 italic">[SYSTEM]: Ready. Configuration parameters parsing active.</div>
+            </div>
+
+            <div class="flex justify-between items-center text-[9px] text-[#4B5563] font-bold px-1 uppercase">
+                <div>Regs: Given [0x2100] | Out Freq [0x2101] | Curr [0x2102] | PID SP [0x0D01] | Ctrl [0x3000]</div>
+            </div>
+        </div>
+
+    </div>
+    <!-- /Row 2 -->
+
+</div>
+<!-- /VIEW VFD -->
+
+<script src="/modules/vfd/vfd_comms.js"></script>
+
+</body>
+</html>
