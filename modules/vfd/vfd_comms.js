@@ -74,7 +74,7 @@ function getConnectionParams() {
 async function writeRegister(register, value, decimals = 0) {
     const { port, address } = getConnectionParams();
 
-    const res = await fetch('/api/write', {
+    const res = await fetch('/api/vfd-write', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -302,7 +302,7 @@ async function checkConnectionNow() {
 
     VfdConsole.log("Sending connection validation ping...");
     try {
-        const res  = await fetch('/api/connect', {
+        const res  = await fetch('/api/vfd-connect', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ port, baud_rate: baud, slave_address: address }),
