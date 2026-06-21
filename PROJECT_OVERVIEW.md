@@ -1,10 +1,31 @@
 # Thermeco Industrie SCADA/HMI — Project Overview & Known Issues
 
-Last updated: 2026-06-21
+Last updated: 2026-06-21 (rev. 3 — route collision fixes documented, full API surface added)
 
 This document explains what the system currently does, how the pieces fit
 together, and — most importantly — what's fragile, incomplete, or risky
 enough to need attention before this runs an actual plant unattended.
+
+> **What changed in this revision (rev. 3):**
+> - **Issue #0 is partially resolved.** `/api/write` and `/api/connect` were the
+>   two confirmed route collisions between `telemetry_bp` and `vfd_blueprint`.
+>   Both are now renamed in `vfd_routes.py`: `/api/write` → `/api/vfd-write`,
+>   `/api/connect` → `/api/vfd-connect`. The full API surface table in §5a now
+>   reflects these names.
+> - **A third partial collision remains:** `/api/read` exists in both blueprints
+>   but on different HTTP methods (POST in telemetry, GET in vfd). Flask routes
+>   these correctly without crashing, but it is still confusing — see updated
+>   Issue #0 below.
+> - **`/api/update-settings` naming corrected.** The previous revision's §6a
+>   described the VFD settings endpoint as `/api/vfd/update-settings` — the
+>   actual route in `vfd_routes.py` is `/api/update-settings`. If
+>   `view_engineering.html` currently calls `/api/vfd/update-settings`, that
+>   call will 404.
+> - **Full VFD API surface documented** for the first time (§5a) — several
+>   routes (`/api/monitor`, `/api/raw`, `/api/read-params`, `/api/write-param`,
+>   `/api/scan-hardware`, `/api/auto-link`) were not mentioned in any previous
+>   revision.
+> - Navigation model and §4/§6a content carried forward unchanged from rev. 2.
 
 ---
 
@@ -31,9 +52,7 @@ What each line does:
   suffix (e.g. from a GitHub zip download).
 - The `$pyPath = ...` line finds whichever Python version is installed
   under the user's local `AppData\Local\Programs\Python\` folder rather
-  than relying on `python` being on `PATH` — useful if there are multiple
-  Pythons installed or `python`/`py` isn't aliased the way you expect on
-  this machine.
+  than relying on `python` being on `PATH`.
 - `& $pyPath app.py` — runs the app with that specific interpreter.
 
 Once running, the HMI is reachable at:
@@ -61,33 +80,24 @@ Press CTRL+C to quit
 Two things worth knowing about this exact output:
 
 1. **The `[VFD] Warning: Could not bind port 'COM3'` line is expected** if
-   no VFD/USB-RS485 adapter is plugged in (or it enumerated on a different
-   COM port). This is `vfd_routes.py`'s `init_vfd()` failing to open the
-   serial port — by design it doesn't crash the app, it just logs and
-   leaves `instrument = None` so the VFD tab shows OFFLINE until you fix
-   the port (Settings tab, or check Device Manager for the actual COM
-   number) and the connection is retried.
+   no VFD/USB-RS485 adapter is plugged in. `vfd_routes.py`'s `init_vfd()`
+   fails to open the serial port — by design it doesn't crash the app, it
+   just logs and leaves `instrument = None` so the VFD shows OFFLINE until
+   you fix the port in the **Engineering Controls** tab and retry.
 
-2. **The VFD warning prints twice, and that's Issue #4 from this doc made
-   visible.** `Restarting with stat` is Werkzeug's debug-mode auto-reloader
-   spawning a second process. Everything at module level — including
-   `init_vfd()`, which runs on import — executes once in the parent
-   watcher process and once again in the actual worker process. The
-   `WERKZEUG_RUN_MAIN` guard added in `app.py` was specifically written to
-   stop the **alarm engine's** WhatsApp/poll threads from double-starting
-   the same way; the VFD module doesn't have that guard, which is why its
-   warning legitimately prints twice here. This is a live demonstration of
-   why `debug=True` should come off before this runs unattended — every
-   module-level side effect in this codebase currently runs twice per
-   boot.
+2. **The VFD warning prints twice** because Werkzeug's debug-mode
+   auto-reloader spawns a second process. Everything at module level —
+   including `init_vfd()`, which runs on import — executes once in the
+   parent watcher and once in the worker. The `WERKZEUG_RUN_MAIN` guard in
+   `app.py` stops the alarm engine's threads from double-starting; the VFD
+   module has no such guard. This is a live demonstration of why `debug=True`
+   needs to come off before unattended deployment.
 
 ### Stopping it
 
-`Ctrl+C` in the same terminal. There's currently no graceful shutdown
-hook for the alarm engine's background threads or the VFD's open serial
-handle — they're daemon threads, so the whole process just dies, which is
-fine for a dev workflow but is its own small item if you ever want a
-clean "drain in-flight WhatsApp sends before exiting" shutdown path.
+`Ctrl+C` in the same terminal. No graceful shutdown hook exists for the
+alarm engine's background threads or the VFD's open serial handle — they
+are daemon threads, so the process dies cleanly enough for dev use.
 
 ---
 
@@ -103,36 +113,80 @@ look like a Siemens SIMATIC Comfort Panel. It does three jobs:
 2. **VFD control** — talks Modbus RTU over RS-485 to a Veichi AC10 variable
    frequency drive (the HP pump's speed controller), as an isolated module
    with its own register map and serial connection.
-3. **Alarm dispatch** — (new) independently polls the same PLC tags against
+3. **Alarm dispatch** — independently polls the same PLC tags against
    a declarative rule set and sends WhatsApp text alerts when a fault
    condition transitions from clear to active.
 
 ---
 
-## 4. Project tree
+## 4. Navigation model (rev. 2 — unchanged)
+
+The tab bar moved from 5 tabs (Synoptic / Data / Settings / Alarms / VFD)
+to **3 zones**, per the current `tab_bar.html`:
+
+| Tab | id | View shown | Purpose |
+|---|---|---|---|
+| 📊 Vue Synoptique | `btn-synoptic` → `view-synoptic` | `synoptic_canvas.html` | Primary workspace — full process flow diagram. The HP pump is interactive *within this view* rather than linking to a separate tab (see §4a). |
+| 📋 Alarmes | `btn-tab-alarms` → `view-alarms` | `alarm-panel.html` | Combined active-alarm panel + historical event log. |
+| ⚙️ Configuration | `btn-tab-engineering` → `view-engineering` | `view_engineering.html` | Restricted maintenance zone: calibration offsets, PLC comms config, VFD connection settings. |
+
+The old **"Consignes" / Settings tab is retired** — absorbed into Engineering
+Controls. There is currently no tab button for `view_dataview.html`; if the
+raw-tag-grid view is still wanted, it needs either its own button or a link
+from within Engineering Controls.
+
+All three are handled by `SynopticHMI.showView(viewId)` — in-page JS tab
+switching, no page reload.
+
+### 4a. The VFD tab → inline panel migration (in progress)
+
+This is **mid-migration**, not finished:
+
+- `tab_bar.html` **still contains** an `<a href="/modules/vfd/vfd-panel.html">`
+  full-page-navigation link (`btn-tab-vfd`) as a fallback.
+- The **inline panel/modal** that's supposed to replace it — opening next
+  to the HP pump icon on the synoptic canvas — **has not been built yet.**
+- The HP pump icon's click handler currently calls `SynopticHMI.showView('vfd')`,
+  which is not a real view in the 3-tab model. This call is silently inert
+  until the inline panel is built.
+
+**Action needed:** decide whether the HP pump opens an inline panel or a
+modal, build it, and update the pump's `onclick` accordingly. Until then,
+the `<a href="vfd-panel.html">` link in the tab bar is the only working path
+to VFD control.
+
+---
+
+## 4b. Project tree (current)
 
 ```
 app.py                              Composition root: creates the Flask app,
                                      registers all blueprints, starts the
-                                     alarm engine, serves a few cross-cutting
+                                     alarm engine, serves cross-cutting
                                      static/template routes.
 
 routes/
 └── telemetry.py                    Generic PLC I/O blueprint (telemetry_bp).
+                                    No url_prefix — routes live at /api/*.
                                     Bit read/write, analog read, bulk area
                                     poll, raw DB diagnostic dump.
 
 modules/
 ├── vfd/
-│   ├── vfd_routes.py               VFD blueprint (vfd_blueprint). Owns its
-│   │                                own Modbus/serial connection, register
-│   │                                maps (F01/F12/F13/C00/C01), and all
-│   │                                /api/vfd/*, /api/control, /api/connect,
-│   │                                /api/monitor endpoints.
-│   ├── vfd-panel.html               Standalone page template for the VFD tab.
-│   └── vfd_comms.js                 VFD tab's frontend controller.
+│   ├── vfd_routes.py               VFD blueprint (vfd_blueprint). No
+│   │                                url_prefix — routes also live at /api/*
+│   │                                (see §5a for full surface and collision
+│   │                                status). Owns its own Modbus/serial
+│   │                                connection and register maps.
+│   ├── vfd-panel.html               Standalone page — still the only
+│   │                                 working VFD UI (see §4a).
+│   └── vfd_comms.js                 VFD page's frontend controller.
+│                                    ⚠ Must be updated: any call to
+│                                    '/api/write' → '/api/vfd-write';
+│                                    any call to '/api/connect' →
+│                                    '/api/vfd-connect'.
 │
-└── alarms/                          (new)
+└── alarms/
     ├── __init__.py
     ├── alarm_config.py              Declarative alarm rules — edit this to
     │                                 add/remove/retune alarms, no code change.
@@ -140,14 +194,14 @@ modules/
     │                                 via Selenium. Runs independently of any
     │                                 browser tab.
     ├── alarm_routes.py               Alarm blueprint (alarm_blueprint).
-    │                                 Status/config/log/test-trigger endpoints.
-    ├── alarm-panel.html              Standalone page template for the alarm tab.
+    │                                 url_prefix="/api/alarms". All alarm
+    │                                 endpoints live at /api/alarms/*.
+    ├── alarm-panel.html              View shown by the Alarmes tab.
     └── alarm_comms.js                Alarm tab's frontend controller.
 
 config/
 └── tags_config.py                   PLC_TAGS: the single source of truth for
-                                    every readable point — component_id →
-                                    variables → {type, offset, area}.
+                                    every readable point.
 
 main/
 ├── services/
@@ -155,51 +209,45 @@ main/
 │   │                                  is_connected flag, and low-level
 │   │                                  read_bit/write_bit/read_real/
 │   │                                  read_db_block methods.
-│   └── telemetry_reader.py           (new) Shared S7 area-read loop, factored
-│                                      out of routes/telemetry.py so the HTTP
-│                                      endpoint and the alarm engine read PLC
-│                                      data through exactly one implementation.
+│   └── telemetry_reader.py           Shared S7 area-read loop, factored
+│                                      out of routes/telemetry.py.
 │
 ├── templates/
-│   ├── index.html                    Page shell. Renders the Comfort Panel
-│   │                                  frame and {% include %}s every component.
-│   └── components/                   NOTE: none of these template files were
-│       │                              directly reviewed — descriptions below
-│       │                              are inferred from index.html's include
-│       │                              list and from what synoptic.js/hmi-app.js
-│       │                              reference (element IDs, onclick targets).
-│       │                              Verify against the actual files.
-│       ├── header.html               likely the top status bar (connection dot).
-│       ├── tab_bar.html               (inferred, not reviewed) likely the
-│       │                              tab switcher (Synoptic / Data / Settings).
-│       ├── synoptic_canvas.html       The process-flow diagram itself.
-│       ├── view_dataview.html         Raw tag grid (auto-built from PLC_TAGS).
-│       ├── view_settings.html         Connection settings form.
-│       ├── event_logger.html          On-screen scrolling log panel.
-│       ├── detail_panel.html          Slide-out panel for per-component detail.
-│       ├── backwash_modal.html        Modal for sand-filter backwash controls.
+│   ├── index.html                    Page shell. ⚠ Confirm
+│   │                                  view_engineering.html is actually
+│   │                                  {% include %}'d here (see §6a).
+│   └── components/
+│       ├── header.html
+│       ├── tab_bar.html               3-tab model + VFD fallback link.
+│       ├── synoptic_canvas.html       SVG technical drawing + HTML overlay.
+│       ├── view_engineering.html      NEW — Configuration tab content.
+│       │                              ⚠ Calls /api/update-settings for VFD
+│       │                              settings (NOT /api/vfd/update-settings
+│       │                              — that path does not exist). Also
+│       │                              calls /api/engineering/calibration
+│       │                              and /api/connect for PLC — the
+│       │                              calibration endpoint does not exist
+│       │                              yet (see §6a).
+│       ├── view_dataview.html         Raw tag grid. No tab button.
+│       ├── view_settings.html         RETIRED — safe to delete.
+│       ├── event_logger.html
+│       ├── detail_panel.html
+│       ├── backwash_modal.html
 │       ├── footer.html
-│       └── scripts.html               Likely where hmi-comms.js / synoptic.js
-│                                       / etc. get <script> tags injected.
+│       └── scripts.html
 │
 └── static/
     ├── css/
-    │   ├── hmi-styles.css             Comfort Panel chrome (bezel, screen inset).
-    │   └── synoptic.css               Process diagram specific styling.
+    │   ├── hmi-styles.css
+    │   └── synoptic.css              Old .loc-* pixel rules are dead code.
     └── js/
-        ├── hmi-app.js                  Master controller. init() loads tag
-        │                               config, starts a 500ms setInterval that
-        │                               fetches telemetry, fans it out to the
-        │                               synoptic renderer + data grid, and runs
-        │                               _evalAlarms() — frontend threshold
-        │                               checks that only write to the on-screen
-        │                               event log (see Issue #1 below).
-        ├── synoptic.js                  SynopticController: draws pump/tank/
-        │                               filter states, the detail side-panel,
-        │                               tab switching, backwash modal actions.
-        └── hmi-comms.js                 (not reviewed directly) — presumed
-                                         thin fetch() wrapper around the
-                                         /api/* endpoints used by hmi-app.js.
+        ├── hmi-app.js                Master controller + duplicate alarm eval.
+        ├── synoptic.js               Renderer + tab switching. 'engineering'
+        │                             now in showView() array (fixed, §6a).
+        └── hmi-comms.js              Thin fetch() wrapper.
+                                      ⚠ Must be updated: any call to
+                                      '/api/write' → '/api/vfd-write';
+                                      '/api/connect' (VFD) → '/api/vfd-connect'.
 ```
 
 ---
@@ -217,8 +265,79 @@ main/
 | `modules/alarms/alarm_config.py` | Defines what counts as an alarm | **Yes** — the canonical rule map |
 | `modules/alarms/alarm_engine.py` | Detects + dispatches alarms | **Yes** — `active_alarms`, `recent_log`, WhatsApp Selenium session |
 | `modules/alarms/alarm_routes.py` | HTTP surface for the alarm tab | No (delegates to `alarm_engine`) |
+| `main/templates/components/view_engineering.html` | Configuration tab UI + `EngineeringPanel` JS controller | No (calls backend endpoints — some missing, see §6a) |
 | `main/static/js/hmi-app.js` | Frontend poll loop + **duplicate** alarm evaluation | **Yes** — `activeAlarms` (frontend copy) |
-| `main/static/js/synoptic.js` | Renders telemetry onto the diagram | No (pure render over data passed in) |
+| `main/static/js/synoptic.js` | Renders telemetry onto the diagram, tab switching, panels | No (pure render over data passed in) |
+
+---
+
+## 5a. Full API surface (all blueprints)
+
+This is the authoritative list of every HTTP endpoint registered in the
+application, based on the actual route decorators in each file.
+
+### telemetry_bp (no url_prefix)
+
+| Method | Path | Handler | Purpose |
+|---|---|---|---|
+| GET | `/api/tags-config` | `get_tags` | Returns `PLC_TAGS` to the frontend |
+| POST | `/api/connect` | `handle_connect` | Connects snap7 client to PLC `{ip}` |
+| POST | `/api/read` | `handle_read_bit` | Read single PLC bit `{db, offset}` |
+| POST | `/api/write` | `handle_write_bit` | Write single PLC bit `{db, offset, value}` |
+| POST | `/api/read-analog` | `handle_read_analog` | Read single DB REAL `{db, offset}` |
+| GET | `/api/telemetry` | `get_bulk_telemetry` | Bulk I/Q area poll for all tags |
+| POST | `/api/diag/db-dump` | `diag_db_dump` | Dev tool: raw DB byte dump `{db, start, length}` |
+
+Also registered on `app.py` directly (not in a blueprint):
+
+| Method | Path | Handler | Purpose |
+|---|---|---|---|
+| GET | `/api/tags-config` | `get_tags_config` | **Duplicate** of `telemetry_bp`'s route — `app.py` registers this separately. Flask will use whichever was registered last. Consolidate to one. |
+| GET | `/` | `index` | Main HMI page |
+
+### vfd_blueprint (no url_prefix)
+
+> **Collision history:** `/api/write` and `/api/connect` were renamed in this
+> blueprint to resolve hard Flask startup collisions with `telemetry_bp`.
+> Update any frontend code (`vfd_comms.js`, `hmi-comms.js`) that still
+> calls the old paths.
+
+| Method | Path | Handler | Purpose | Collision status |
+|---|---|---|---|---|
+| GET | `/vfd` | `vfd_page` | Renders `vfd-panel.html` | ✅ Unique |
+| GET | `/api/vfd/status` | `get_status` | Live Hz, A, AI1, F01.01, F01.02, counters | ✅ Unique |
+| POST | `/api/vfd-write` | `write_hardware_bus` | Write arbitrary Modbus register | ✅ Renamed (was `/api/write`) |
+| POST | `/api/vfd-connect` | `api_connect` | Open serial, handshake F01.01 | ✅ Renamed (was `/api/connect`) |
+| POST | `/api/control` | `api_control` | Send FORWARD/REVERSE/STOP/RESET to VFD | ✅ Unique — but unauthenticated pump control, see Issue #5 |
+| GET | `/api/monitor` | `api_monitor` | Read all C00 / C01 monitor registers | ✅ Unique |
+| POST | `/api/raw` | `api_raw_transfer` | FC03 read or FC06/16 write at any address | ✅ Unique |
+| GET | `/api/read-params` | `api_read_params` | Read all F01 / F12 / F13 parameter registers | ✅ Unique |
+| POST | `/api/write-param` | `api_write_param` | Write a single named F-parameter by key | ✅ Unique |
+| POST | `/api/update-settings` | `api_update_settings` | Update VFD port/baud/slave and re-init | ⚠ Unique in backend, but `view_engineering.html` may call `/api/vfd/update-settings` (wrong path — will 404). Fix the frontend call. |
+| GET | `/api/read` | `api_read_register` | Single register debug read `?offset=0x...` | ⚠ Same path as telemetry's `/api/read` — different HTTP method (GET vs POST), so Flask routes correctly. Still confusing; rename to `/api/vfd-read` for clarity. |
+| POST | `/api/scan-hardware` | `api_scan_hardware` | List available COM ports | ✅ Unique |
+| POST | `/api/auto-link` | `api_auto_link` | Auto-connect to first available COM port | ✅ Unique |
+
+### alarm_blueprint (url_prefix = `/api/alarms`)
+
+| Method | Path | Handler | Purpose |
+|---|---|---|---|
+| GET | `/api/alarms/mock-data` | `get_mock_alarm_data` | Fake PLC values for WhatsApp testing without PLC |
+| GET | `/api/alarms/status` | `alarm_status` | Current active/clear state of all rules |
+| GET | `/api/alarms/log` | `alarm_log` | Recent event log, newest first (`?limit=N`) |
+| GET | `/api/alarms/config` | `alarm_config_endpoint` | Rule definitions (labels, thresholds, severity) |
+| POST | `/api/alarms/test/<rule_id>` | `alarm_test` | Manually fire a test WhatsApp dispatch |
+| GET | `/api/alarms/wa-status` | `wa_status` | Is the WhatsApp Web session authenticated? |
+
+### Endpoints expected by frontend but not yet implemented
+
+These are called by `view_engineering.html`'s `EngineeringPanel` JS
+controller but have no handler in any blueprint:
+
+| Path | Expected by | Status |
+|---|---|---|
+| `POST /api/engineering/calibration` | `EngineeringPanel` save | ❌ Not implemented |
+| `POST /api/update-settings` | `EngineeringPanel` PLC comms save | ✅ Exists in `vfd_blueprint` — but this saves VFD serial settings, not PLC IP/rack/slot. A separate PLC settings endpoint is still missing. |
 
 ---
 
@@ -227,208 +346,195 @@ main/
 Ordered roughly by how much it matters for a system that's supposed to
 alert someone about a real fault.
 
-### Issue #0 — `/api/write` is registered by two different blueprints (real bug, not hypothetical)
-**Where:** `routes/telemetry.py` (`telemetry_bp.route('/api/write', ...)` →
-`handle_write_bit`, writes a single PLC bit by `db`/`offset`) and
-`modules/vfd/vfd_routes.py` (`vfd_blueprint.route('/api/write', ...)` →
-`write_hardware_bus`, writes an arbitrary Modbus register on the VFD by
-`register`/`value`).
+### Issue #0 — Route collisions (partially resolved, one remaining)
 
-Both blueprints are registered on the same Flask app in `app.py`. Flask
-blueprints don't get a URL prefix here (neither blueprint sets
-`url_prefix=`), so **these are the literal same route path on the same
-app**. Two different things happen depending on registration order and
-Flask/Werkzeug version: either Flask raises `AssertionError: View function
-mapping is overwriting an existing endpoint function` at startup and the
-app refuses to boot, or one handler silently shadows the other and you get
-PLC bit-writes routed into the VFD's Modbus write path (or vice versa) with
-totally different payload shapes (`db`/`offset`/`value` vs.
-`register`/`value`/`decimals`).
+**Resolved in rev. 3:**
+- `/api/write` — renamed to `/api/vfd-write` in `vfd_routes.py`. ✅
+- `/api/connect` — renamed to `/api/vfd-connect` in `vfd_routes.py`. ✅
 
-**This is the single most urgent fix in this document** — it's not a
-"someday" cleanup, it's a startup-time collision (or worse, a silent
-misroute) in code that writes to physical actuators.
+**Frontend must be updated:** any call to the old paths in `vfd_comms.js`
+or `hmi-comms.js` will now 404. Search for `'/api/write'` and
+`'/api/connect'` in all JS files and update to the new names. The
+Engineering Controls tab's "Tester Connexion" button calls `/api/connect`
+with `{ip}` — this should hit `telemetry_bp`'s handler (correct), but
+verify no VFD-connect logic was accidentally wired to the same button.
 
-**Fix direction:** give each blueprint a distinct prefix, e.g.
-```python
-app.register_blueprint(telemetry_bp)                       # /api/write  (PLC bit)
-app.register_blueprint(vfd_blueprint, url_prefix='/vfd')    # /vfd/api/write (Modbus)
-```
-or rename one of the two routes (e.g. VFD's becomes `/api/vfd/write` to
-match its sibling `/api/vfd/status`, which already follows that
-convention). Check every other route in `vfd_routes.py` for the same
-collision risk while you're in there — `/api/connect`, `/api/control`,
-`/api/read`, and `/api/update-settings` are all also unprefixed and at
-least `/api/connect` exists in `telemetry.py` too with a different payload
-shape (`ip` vs. `port`/`baud_rate`/`slave_address`).
+**Still open — `/api/read` (low severity):**
+- `telemetry_bp`: `POST /api/read` — payload `{db, offset}` → reads a PLC
+  DB bit.
+- `vfd_blueprint`: `GET /api/read` — query param `?offset=0x...` → reads a
+  Modbus register.
+
+Flask correctly dispatches these by HTTP method, so there is no startup
+crash and no silent shadowing. However, the shared path is confusing and
+fragile if either handler ever needs to add the other's method. **Fix
+direction:** rename the VFD handler to `GET /api/vfd-read` to match the
+convention already established by `/api/vfd-write` and `/api/vfd-connect`.
+
+**Still open — `/api/update-settings` naming mismatch:**
+The VFD blueprint registers this as `POST /api/update-settings`. The
+previous overview revision (and likely `view_engineering.html`) referenced
+it as `/api/vfd/update-settings` — a path that does not exist and will
+return 404. **Fix direction:** update `view_engineering.html`'s
+`EngineeringPanel` to call `/api/update-settings` (the actual path), or
+rename the route to `/api/vfd/update-settings` to match the expectation.
+Either is fine; just make the two sides agree.
+
+**Still open — duplicate `/api/tags-config` registration:**
+Both `telemetry_bp` and `app.py` register a `GET /api/tags-config` route.
+Flask will use whichever was registered last (blueprint before direct
+routes in the current `app.py` order, so `app.py`'s handler wins). Both
+return `PLC_TAGS`, so functionally identical right now — but this is
+fragile. Remove the one from `app.py` and let the blueprint own it.
+
+### 6a. Issues introduced or surfaced by the tab bar restructure
+
+**Fixed during rev. 2:**
+- **`showView()` was missing `'engineering'` from its view-id array.**
+  Confirmed fixed by adding `'engineering'` to that array in `synoptic.js`.
+
+**Still open:**
+- **VFD migration is half-done (§4a).** The HP pump's `onclick` calls
+  `showView('vfd')`, which is not a real view in the 3-tab model. Clicking
+  the pump does nothing. The tab bar's `<a href>` fallback to
+  `vfd-panel.html` is the only working VFD path until the inline panel is
+  built.
+- **`view_engineering.html`'s backend endpoints are partially missing.**
+  `/api/engineering/calibration` does not exist. `/api/update-settings`
+  does exist (VFD serial settings) but is not the same as a PLC IP/rack/
+  slot config endpoint. `/api/vfd/update-settings` — as referenced in the
+  previous overview — does not exist; the actual path is
+  `/api/update-settings`. The Save/Test buttons will fail until these are
+  reconciled.
+- **`view_dataview.html` has no tab button.** Needs either a 4th button
+  or a link from within Engineering Controls, or retire it.
+- **`view_settings.html` is now orphaned.** Confirm nothing includes it,
+  then delete it.
+- **Confirm `index.html` actually includes `view_engineering.html`.**
+  If the `{% include %}` is missing, the Configuration tab will remain
+  blank despite the JS fix being correct.
 
 ### Issue #1 — Alarm logic now exists in two places, and they can disagree
 **Where:** `hmi-app.js`'s `_evalAlarms()` vs. `modules/alarms/alarm_config.py`
 
-The frontend still runs its own hardcoded threshold checks (HP overpressure
-at hardcoded fallback `16`, conductivity at hardcoded fallback `500`, plus
-feed/HP pump fault bits) and writes them to the on-screen event log only.
-The new backend engine runs a *second*, separately-maintained set of the
-same checks and is the one that actually sends WhatsApp messages.
+The frontend runs its own hardcoded threshold checks and writes them to
+the on-screen event log only. The backend engine runs a separately-
+maintained set of the same checks and is the one that sends WhatsApp
+messages. If someone tunes a threshold in one place and not the other, the
+on-screen log and the WhatsApp alert will disagree — dangerous in a safety
+system.
 
-**Why this matters:** if someone tunes a threshold in one place and not the
-other, the on-screen log and the WhatsApp alert will disagree about whether
-something is currently in alarm. That's a confusing — and for a safety
-system, dangerous — state to be in.
-
-**Fix direction:** pick one source of truth. Either (a) delete `_evalAlarms`
-from `hmi-app.js` and have the on-screen log subscribe to
-`/api/alarms/log` + `/api/alarms/status` instead, or (b) have `hmi-app.js`
-fetch `/api/alarms/config` at startup and evaluate against those rules
-instead of hardcoded numbers. (a) is simpler and was flagged as a pending
-decision — not yet implemented.
+**Fix direction:** delete `_evalAlarms` from `hmi-app.js` and have the
+on-screen log subscribe to `/api/alarms/log` and `/api/alarms/status`
+instead. The backend is already the authoritative source.
 
 ### Issue #2 — Selenium/WhatsApp Web is a fundamentally fragile delivery channel
 **Where:** `modules/alarms/alarm_engine.py`
 
-This automates the WhatsApp Web browser UI by clicking through it — it is
-not the official WhatsApp Business API. Concretely:
+This automates the WhatsApp Web browser UI — it is not the official API.
+It breaks when WhatsApp changes their DOM, violates WhatsApp's ToS, has no
+retry/backoff logic, and serializes all dispatches through a single Chrome
+session so simultaneous alarms queue up behind each other.
 
-- **It breaks every time WhatsApp changes their web client's DOM.** This
-  already happened once in this project (the original voice-note attach
-  button selector went stale and silently timed out).
-- **It's against WhatsApp's Terms of Service** for automated/bulk messaging,
-  which carries a real risk of the number being banned with no warning.
-- **No retry/backoff logic** — if a send fails (timeout, disconnected
-  session, WhatsApp UI update), the alarm is logged as `"failed"` and
-  nothing retries it. For a fire/gas/intrusion-class alarm, a single silent
-  failure with no retry is a real gap.
-- **Single Chrome session, single lock (`wa_lock`)** — alarms are dispatched
-  to each number sequentially, with `time.sleep()` waits between each. If
-  three alarms fire within a few seconds of each other, they queue up
-  behind each other; the second and third alarms could be delayed by
-  10–20+ seconds before anyone is notified.
-
-**Fix direction (in order of effort):** at minimum, add retry-with-backoff
-and a "WhatsApp session died, restart it automatically" watchdog. Longer
-term, evaluate the official WhatsApp Business Platform API (Meta-hosted,
-or via a provider like Twilio) — it's a paid service but removes the
-"breaks when WhatsApp updates their website" failure mode entirely, and
-removes the ToS risk.
+**Fix direction:** at minimum, add retry-with-backoff and a session watchdog.
+Longer term, evaluate the official WhatsApp Business Platform API (Meta or
+a provider like Twilio) to remove the DOM-fragility and ToS risk entirely.
 
 ### Issue #3 — No persistence: every list, log, and alarm state lives in memory
 **Where:** `alarm_engine.py` (`recent_log`, `active_alarms`), `vfd_routes.py`
-(telemetry counters), `app.py`'s Flask process in general.
+(telemetry counters).
 
-If the Flask process restarts (crash, deploy, server reboot, `debug=True`
-reloader triggering unexpectedly), you lose:
-- The entire alarm dispatch history (`recent_log`)
-- Current alarm active/inactive state (`active_alarms`) — meaning an alarm
-  that's still actively firing will be treated as "new" again on restart
-  and may re-notify, or conversely won't be detected as "already known"
-- VFD comms counters (`_tx_count`/`_rx_count`/`_crc_errors`)
+A Flask restart loses the entire alarm dispatch history, active alarm state
+(causing re-notification or missed detection on restart), and VFD comms
+counters. No incident review is possible beyond what's currently in RAM.
 
-**Why this matters:** for any kind of incident review ("what alarms fired
-overnight and were they acknowledged?"), in-memory-only state means the
-answer is "we don't know, the server restarted." This also means there's no
-record of plant alarm history beyond whatever's currently in RAM.
-
-**Fix direction:** at minimum, append `recent_log` entries to a flat file
-or SQLite as well as memory. SQLite is a reasonable first step — no new
-infra, durable across restarts, queryable for reporting.
+**Fix direction:** append `recent_log` entries to a flat file or SQLite as
+well as memory. SQLite is a reasonable first step — no new infra, durable
+across restarts, queryable for reporting. Natural place to also persist
+calibration offsets once `/api/engineering/calibration` is implemented.
 
 ### Issue #4 — `debug=True` in production-facing code
-**Where:** `app.py`, `app.run(host='0.0.0.0', port=5000, debug=True)`
+**Where:** `app.py`
 
-Flask's debug mode:
-- Exposes the **Werkzeug interactive debugger** on any unhandled exception
-  — which, if this is reachable from the plant network (and it explicitly
-  binds `0.0.0.0` to accept connections from PLCs/simulators), means anyone
-  who can trigger a server error gets an interactive Python shell on your
-  HMI server.
-- Auto-reloads on file changes, which is what required the
-  `WERKZEUG_RUN_MAIN` guard added when wiring in the alarm engine — a
-  reasonable proxy that more "this is actually a dev convenience flag
-  left on" problems exist nearby.
-
-**Fix direction:** `debug=False` for anything other than active local
-development, full stop. If you need auto-reload during development, that's
-fine locally, but it shouldn't be the same flag that's live when this is
-deployed near real hardware.
+The current `app.py` already reads the debug flag from the environment:
+```python
+debug_mode = os.environ.get("DEBUG", "0").strip() in ("1", "true", "True")
+app.run(host="0.0.0.0", port=5000, debug=debug_mode)
+```
+This means `debug=False` by default unless `DEBUG=1` is set in the
+environment — an improvement over the hardcoded `debug=True` that was
+here previously. **Verify this is the version actually running.** If any
+earlier copy of `app.py` with hardcoded `debug=True` is still on the
+machine, it exposes the Werkzeug interactive debugger to anyone who can
+reach port 5000 on the LAN — effectively a remote Python shell.
 
 ### Issue #5 — No authentication anywhere
 **Where:** every blueprint.
 
-Every endpoint — including `/api/control` (which can send FORWARD/REVERSE/
-STOP/RESET to the VFD), `/api/write` (arbitrary PLC bit writes), and
+Every endpoint — including `/api/control` (sends FORWARD/REVERSE/STOP/
+RESET to the VFD drive), `/api/write` (arbitrary PLC bit writes),
+`/api/vfd-write` (arbitrary Modbus register writes), and
 `/api/alarms/test/<rule_id>` (fires a real WhatsApp dispatch) — is
 unauthenticated. Combined with `CORS(app)` enabling all origins and
 `host='0.0.0.0'`, anyone who can reach port 5000 on the network can drive
 the pumps or spam the alarm WhatsApp numbers.
 
-**Fix direction:** this matters in proportion to how exposed the network
-actually is. If this is genuinely isolated on a private plant VLAN with no
-outside routing, the risk is lower but still real (anyone on that VLAN,
-including a compromised device, has full control). At minimum, scope CORS
-to known origins instead of `CORS(app)` wide open, and put basic auth or an
-API key in front of write/control endpoints before this is reachable from
-anywhere beyond a single trusted machine.
+**Fix direction:** scope CORS to known origins instead of `CORS(app)` wide
+open. Put basic auth or an API key in front of all write and control
+endpoints — including the new Engineering ones once they exist.
 
 ### Issue #6 — Alarm poll interval vs. telemetry poll interval mismatch
 **Where:** `alarm_engine.py` (`POLL_INTERVAL_SECONDS = 2`) vs. `hmi-app.js`
-(`setInterval(() => this._scanCycle(), 500)`).
+(`setInterval(..., 500)`).
 
-The frontend sees new data every 500ms; the alarm engine only checks every
-2 seconds. For fast-transient faults (a fault bit that pulses briefly), the
-alarm engine could miss it between polls while the frontend log catches it
-— another flavor of Issue #1's "two systems disagree" problem, this time
-caused by timing rather than logic.
+Frontend sees new data every 500ms; the alarm engine only checks every 2
+seconds. For fast-transient faults, the alarm engine could miss a trip that
+the frontend log catches — another flavor of Issue #1.
 
 **Fix direction:** decide what "fast enough" means for your actual fault
-characteristics (a trip relay's contact dwell time, say), and either match
-the intervals or document why they intentionally differ.
+characteristics and either match the intervals or document why they differ.
 
 ### Issue #7 — `evaluate_condition` returning `None` is a silent no-op
 **Where:** `alarm_config.py`
 
-By design, if a tag read fails (`value is None`) or a rule has a bad
-threshold, `evaluate_condition` returns `None` and the engine "holds
-previous state" rather than guessing. This is the *correct* choice to avoid
-false resolves on a comms blip — but it currently fails **silently**. There's
-no metric or log line distinguishing "this rule has been unevaluable for
-the last 40 polls because the tag name has a typo" from "this rule is
-healthy and just hasn't fired."
+If a tag read fails or a rule has a bad threshold, `evaluate_condition`
+returns `None` and the engine holds previous state rather than guessing.
+Correct behavior — but currently fails **silently**. A typo'd tag field in
+a rule looks identical to a healthy rule that hasn't fired.
 
 **Fix direction:** track a per-rule "last successfully evaluated" timestamp
-and surface it on the alarm tab (or log a warning after N consecutive
-unevaluable polls) — a typo'd `tag` field in a rule should be loud, not
-silent.
+and surface it on the alarm tab, or log a warning after N consecutive
+unevaluable polls.
 
 ### Issue #8 — Inconsistent error-message shapes across blueprints
 **Where:** compare `routes/telemetry.py` (`{"status": "error", "message": ...}`)
-vs. `vfd_routes.py` (`{"status": "ERROR", "message": ...}` *and*
-`{"success": False, "msg": ...}` depending on the endpoint).
+vs. `vfd_routes.py` (`{"status": "ERROR", "message": ...}` and
+`{"success": False, "msg": ...}` depending on the endpoint) vs.
+`alarm_routes.py` (delegates to `alarm_engine`, which returns its own shapes).
 
-Three different shapes for "this failed" across the codebase
-(`status`/`message` lowercase, `status`/`message` uppercase,
-`success`/`msg`) means any frontend code that wants to handle errors
-generically can't — it has to know which endpoint family it's talking to.
+Three different shapes for "this failed" means any generic frontend error
+handler has to know which endpoint family it's calling. The `EngineeringPanel`
+controller already has to check `(data.status === 'success' || data.success)`
+everywhere as a result.
 
-**Fix direction:** not urgent, but worth standardizing the next time you're
-touching any of these files — pick one shape and migrate opportunistically
-rather than as a dedicated rewrite.
+**Fix direction:** standardize on one shape (suggest `{"status": "success"|"error", "message": "..."}`) and migrate opportunistically when touching these files.
 
 ### Issue #9 — Hardcoded phone numbers and PLC IP defaults in source
 **Where:** `alarm_engine.py` (`NUMBERS`), `routes/telemetry.py`
 (`ip = data.get('ip', '192.168.1.10')`), `vfd_routes.py` (`"port": "COM3"`).
 
-These are fine for a single-site deployment but mean every config change
-requires a code edit and redeploy, and the WhatsApp numbers are sitting in
-plaintext in version control.
+Config changes require a code edit and redeploy. WhatsApp numbers sit in
+plaintext in version control. The Engineering Controls forms are a step
+toward fixing IP/port/baud — once their backend endpoints exist, those
+values stop needing code edits. The phone number list still needs the same
+treatment.
 
 **Fix direction:** move to environment variables or a `.env`/config file
-that's gitignored, especially for the phone numbers.
+that is gitignored, especially for the phone numbers.
 
 ---
 
 ## 7. Things that are working correctly and don't need touching
-
-To be clear about what's *not* broken:
 
 - The S7 area-read logic (`telemetry_reader.py`) correctly distinguishes
   I/Q area codes, handles BOOL bit-extraction and INT/WORD struct unpacking,
@@ -440,25 +546,60 @@ To be clear about what's *not* broken:
   on OFF→ON transition) correctly avoids re-sending the same alarm every
   poll cycle.
 - The "hold previous state on disconnected/unreadable data" behavior in
-  both the alarm engine and `evaluate_condition` is the right call — it
-  would be easy to get this wrong (treating `None`/disconnected as "all
-  clear") and it wasn't.
+  both the alarm engine and `evaluate_condition` is the right call.
+- The rebuilt `synoptic_canvas.html` and its SVG/HTML-overlay split: every
+  id `synoptic.js`'s `updateSynoptic()` reads or writes was verified to
+  exist exactly once.
+- The `showView()` fix (§6a) is confirmed applied and working for the
+  Configuration tab.
+- The `WERKZEUG_RUN_MAIN` guard in `app.py` correctly prevents the alarm
+  engine's background threads from double-starting under the debug reloader.
+- `debug` mode is now read from the `DEBUG` environment variable rather than
+  hardcoded (assuming the current `app.py` is the version running).
 
 ---
 
 ## 8. Suggested next steps, in priority order
 
-1. Fix the `/api/write` / `/api/connect` blueprint route collision
-   (Issue #0) — this can prevent the app from starting at all, or silently
-   misroute writes, and should be fixed before anything else in this list.
-2. Resolve Issue #1 (duplicate alarm logic) — pick frontend-log-reads-
-   backend-state as the model, since the backend is now the actual source
-   of truth for dispatch.
-3. Turn off `debug=True` (Issue #4) before this is anywhere near a real
-   network, even temporarily.
-4. Add a minimal persistence layer for alarm history (Issue #3) — SQLite
-   is enough to start.
-5. Decide on an authentication story (Issue #5) before this is reachable
-   from more than one trusted machine.
-6. Add retry/watchdog logic to the WhatsApp dispatch path (Issue #2), or
-   begin evaluating the official Business API as a replacement.
+1. **Update all frontend JS for the renamed VFD routes.** Search
+   `vfd_comms.js` and `hmi-comms.js` for `/api/write` and `/api/connect`
+   and update to `/api/vfd-write` and `/api/vfd-connect`. This is a
+   prerequisite for VFD control working at all from the browser.
+
+2. **Fix the `/api/update-settings` naming mismatch.** Either update
+   `view_engineering.html` to call `/api/update-settings` (existing path),
+   or rename the route in `vfd_routes.py` to `/api/vfd/update-settings` to
+   match the frontend expectation. Pick one and make both sides consistent.
+
+3. **Rename `/api/read` (GET) in `vfd_blueprint` to `/api/vfd-read`.**
+   Eliminates the remaining same-path ambiguity with telemetry's `POST /api/read`.
+
+4. **Remove the duplicate `/api/tags-config` registration from `app.py`.**
+   Let `telemetry_bp` own it.
+
+5. **Decide and build the HP-pump → VFD path (§4a).** Either finish the
+   inline panel/modal and repoint the pump's `onclick`, or formally keep
+   `view-vfd` as a 4th in-page tab. Right now the pump click does nothing.
+
+6. **Implement the missing Engineering Controls backend endpoints.**
+   `/api/engineering/calibration` does not exist. A PLC comms config
+   endpoint (IP/rack/slot) also does not exist — `/api/update-settings`
+   saves VFD settings, not PLC settings. Implement these so the
+   Configuration tab is functional, not just visible.
+
+7. **Resolve Issue #1 (duplicate alarm logic)** — delete `_evalAlarms`
+   from `hmi-app.js` and subscribe the on-screen log to
+   `/api/alarms/status` and `/api/alarms/log`.
+
+8. **Add a minimal persistence layer for alarm history and calibration
+   offsets (Issue #3)** — SQLite is enough to start.
+
+9. **Decide on an authentication story (Issue #5)** before this is
+   reachable from more than one trusted machine.
+
+10. **Add retry/watchdog logic to the WhatsApp dispatch path (Issue #2)**,
+    or begin evaluating the official Business API as a replacement.
+
+11. **Clean up navigation loose ends:** decide where `view_dataview.html`
+    lives (or retire it), delete the orphaned `view_settings.html`, and
+    confirm `index.html` actually includes `view_engineering.html`.
