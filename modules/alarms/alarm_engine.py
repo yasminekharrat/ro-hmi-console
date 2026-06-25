@@ -17,6 +17,7 @@ import time
 import threading
 import traceback
 import requests
+import os, glob
 import urllib.parse
 from datetime import datetime
 
@@ -235,6 +236,15 @@ def _send_whatsapp_to_all(rule_id: str, label: str, severity: str, value, messag
 
 
 # ── WHATSAPP SESSION INIT ─────────────────────────────────────────────────────
+
+lock_pattern = os.path.join(os.path.expanduser("~"), ".wdm", ".wdm-lock-*")
+for lock_file in glob.glob(lock_pattern):
+    try:
+        os.remove(lock_file)
+        print(f"[ALARM] Removed stale wdm lock: {lock_file}")
+    except Exception:
+        pass
+
 
 def init_whatsapp_session(session_path: str | None = None):
     """Launch Chrome + WhatsApp Web and block until authentication check passes."""

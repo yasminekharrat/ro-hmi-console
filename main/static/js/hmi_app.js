@@ -1,4 +1,3 @@
-
 class HmiApplicationCore {
     // ─── CLASS FIELDS ────────────────────────────────────────────────────────
     isConnected = false;
@@ -274,6 +273,34 @@ class HmiApplicationCore {
             }
         } catch (e) {
             HmiRenderer.appendEventLog("Write exception.", "WR_ERR", true);
+        }
+    }
+
+    // ─── WRITE BY TAG NAME (looks up db/offset from tags_config.py server-side) ──
+    // Use this instead of triggerWrite() for anything wired to a named tag in
+    // config/tags_config.py — it calls /api/write-tag, which refuses to write
+    // any tag not explicitly marked "writable": True server-side. This is the
+    // only write path that keeps tags_config.py as the single edit point: no
+    // db/offset is ever hardcoded in the frontend for these calls.
+    async triggerWriteByTag(tagId, value) {
+        if (!this.isConnected) {
+            HmiRenderer.appendEventLog("Action aborted: PLC offline.", "SYS_ERR", true);
+            return;
+        }
+        try {
+            const res = await fetch('/api/write-tag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tag_id: tagId, value: value })
+            });
+            const data = await res.json();
+            if (data?.status === 'success') {
+                HmiRenderer.appendEventLog(`Write OK: ${tagId} ← ${value} (${data.message})`, "PLC_WR");
+            } else {
+                HmiRenderer.appendEventLog(`Write failed [${tagId}]: ${data?.message}`, "WR_ERR", true);
+            }
+        } catch (e) {
+            HmiRenderer.appendEventLog(`Write exception [${tagId}].`, "WR_ERR", true);
         }
     }
 }

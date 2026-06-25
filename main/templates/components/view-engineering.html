@@ -388,7 +388,7 @@ class EngineeringPanelController {
         };
         this._setStatus('Enregistrement config PLC…');
         try {
-            const res = await fetch('/api/update-settings', {
+            const res = await fetch('/api/plc-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -442,7 +442,7 @@ class EngineeringPanelController {
             // Real endpoint is the bare /api/update-settings (not namespaced under
             // /api/vfd/ — vfd_routes.py never renamed this one, only the two that
             // actually collided with telemetry.py). Response shape is {success, msg}.
-            const res = await fetch('/api/update-settings', {
+            const res = await fetch('/api/vfd/update-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

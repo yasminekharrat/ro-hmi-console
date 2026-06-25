@@ -187,7 +187,8 @@ ALARM_RULES = [
 # Only CRITICAL severity alarms with whatsapp=True are sent here.
 WHATSAPP_NUMBERS = [
     "+21698760727",
-    "+21698760700",
+ #   "+21698760700",
+    "+21693760724",
 ]
 
 # ── POLLING INTERVAL ──────────────────────────────────────────────────────────

@@ -1,15 +1,6 @@
 """
 main/services/plc_service.py
-Snap7 PLC communication service — hardened for NetToPLCSim / PLCSim compatibility.
 
-NetToPLCSim hard rules:
-  1. NEVER use db_read() for I/Q area tags. Use client.read_area() instead.
-  2. NEVER pass an odd byte_count to db_read() — PLCSim rejects non-even PDUs
-     with S7 error class=0x81, code=0x04.
-  3. NEVER call client.db_get() or high-level read_area wrappers that internally
-     build unsupported S7 PDU function codes.
-  4. The db_read / write_* helpers below are only for Data Block (DB) tags.
-     I/Q area tags must go through client.read_area() directly (see telemetry.py).
 """
 
 import struct
@@ -123,7 +114,7 @@ class PlcService:
             raw[0] |= (1 << bit_idx)
         else:
             raw[0] &= ~(1 << bit_idx)
-        self.client.db_write(db, byte_idx, bytes(raw[:1]))
+        self.client.db_write(db, byte_idx, bytes(raw[:2]))
 
     def write_real(self, db: int, offset, value: float):
         """Write 4-byte IEEE-754 REAL to a DB."""

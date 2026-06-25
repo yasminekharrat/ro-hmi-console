@@ -90,8 +90,8 @@ class SynopticController {
                     }
                 ],
                 actions: [
-                    { label: "MARCHE", onclick: "HmiApp.triggerWrite(50,'20.0',true)",  color: "green" },
-                    { label: "ARRÊT",  onclick: "HmiApp.triggerWrite(50,'20.0',false)", color: "red"   },
+                    { label: "MARCHE", onclick: "HmiApp.triggerWriteByTag('feed_pump-cmd', true)",  color: "green" },
+                    { label: "ARRÊT",  onclick: "HmiApp.triggerWriteByTag('feed_pump-cmd', false)", color: "red"   },
                 ]
             },
             hp_pump: {
@@ -108,8 +108,8 @@ class SynopticController {
                     }
                 ],
                 actions: [
-                    { label: "MARCHE HP", onclick: "HmiApp.triggerWrite(50,'24.0',true)",  color: "green" },
-                    { label: "ARRÊT HP",  onclick: "HmiApp.triggerWrite(50,'24.0',false)", color: "red"   },
+                    { label: "MARCHE HP", onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', true)",  color: "green" },
+                    { label: "ARRÊT HP",  onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', false)", color: "red"   },
                 ]
             },
             tanks: {
@@ -140,8 +140,8 @@ class SynopticController {
                     }
                 ],
                 actions: [
-                    { label: "Mode AUTO",   onclick: "HmiApp.triggerWrite(50,'44.0',true)",  color: "blue"   },
-                    { label: "Mode MANUEL", onclick: "HmiApp.triggerWrite(50,'44.1',true)",  color: "purple" },
+                    { label: "Mode AUTO",   onclick: "HmiApp.triggerWriteByTag('global_management-auto', true)",   color: "blue"   },
+                    { label: "Mode MANUEL", onclick: "HmiApp.triggerWriteByTag('global_management-manual', true)", color: "purple" },
                 ]
             }
         };
@@ -377,9 +377,6 @@ class SynopticController {
     // ──────────────────────────────────────────────────────────────
     // TAB SWITCHING
     // ──────────────────────────────────────────────────────────────
-    // ──────────────────────────────────────────────────────────────
-    // TAB SWITCHING
-    // ──────────────────────────────────────────────────────────────
     showView(view) {
         // 1. We added 'alarms' to the array
         ['synoptic', 'dataview', 'settings', 'alarms','engineering'].forEach(v => {
@@ -402,14 +399,14 @@ class SynopticController {
     applyBackwashSettings() {
         const dp = parseFloat(document.getElementById('bw-dp-threshold')?.value || 0.5);
         const dur = parseFloat(document.getElementById('bw-duration')?.value || 5);
-        HmiApp.triggerWrite(50, '0.0', dp);
-        HmiApp.triggerWrite(50, '4.0', dur);
+        HmiApp.triggerWriteByTag('sand_filter-dp_max', dp);
+        HmiApp.triggerWriteByTag('sand_filter-backwash_duration', dur);
         HmiRenderer.appendEventLog(`Paramètres BW appliqués: ΔP=${dp}Bar, Durée=${dur}min`, "BW_CFG");
         document.getElementById('backwash-modal').classList.remove('open');
     }
 
     startManualBackwash() {
-        HmiApp.triggerWrite(50, '8.0', true);
+        HmiApp.triggerWriteByTag('sand_filter-manual_backwash_trigger', true);
         HmiRenderer.appendEventLog("Contre-lavage manuel déclenché!", "BW_CMD", false);
         document.getElementById('backwash-modal').classList.remove('open');
     }
@@ -422,7 +419,7 @@ class SynopticController {
     // DIAGNOSTIC DB DUMP
     // ──────────────────────────────────────────────────────────────
     async runDiagDump() {
-        const db  = parseInt(document.getElementById('diag-db')?.value || 51);
+        const db  = parseInt(document.getElementById('diag-db')?.value || 2);
         const start = parseInt(document.getElementById('diag-start')?.value || 0);
         const len = parseInt(document.getElementById('diag-len')?.value || 48);
         const out = document.getElementById('diag-output');

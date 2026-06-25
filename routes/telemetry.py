@@ -2,14 +2,27 @@
 routes/telemetry.py
 Flask blueprint for all PLC communication endpoints.
 
-NetToPLCSim compatibility notes:
-  - NEVER call db_read() for I/Q area tags — use client.read_area() with the
-    correct S7 area code (0x81 = Inputs, 0x82 = Outputs).
-  - NEVER call db_read() with an odd byte count — PLCSim rejects non-even PDUs.
-  - DB reads (read_db_block) are only used in the /diag/db-dump endpoint where
+REV: moved fully to DB2 — area reads (read_area / I/Q) are gone.
+───────────────────────────────────────────────────────────────────
+All tags in config/tags_config.py now live in DB2 ("Declaration hmi").
+/api/telemetry's bulk loop used to call client.read_area() directly
+for physical I/Q tags; that logic has been removed and replaced with
+a call into main/services/telemetry_reader.py, which reads every
+enabled DB tag through plc_service's typed DB readers (read_bit,
+read_int, read_dint, read_word, read_real).
+
+/api/read and /api/read-analog (single-tag reads) are unchanged —
+they were already DB-only.
+
+/api/diag/db-dump is unchanged — it was already an explicit-DB
+diagnostic tool.
+
+NetToPLCSim compatibility notes (still apply to plc_service under
+the hood, even though this file no longer touches read_area itself):
+  - NEVER call db_read() with an odd byte count — PLCSim rejects
+    non-even PDUs. plc_service._db_read_bytes() already enforces this.
+  - DB reads (read_db_block) are only used in /api/diag/db-dump where
     the DB number is explicitly provided by the caller.
-  - The /api/telemetry endpoint is 100% area-read based when tags_config uses
-    "area": "I" or "area": "Q" — no DB involvement at all.
 """
 
 import sys
@@ -23,6 +36,7 @@ if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
 from main.services.plc_service import plc_service
+from main.services.telemetry_reader import read_all_tags, write_tag_by_id
 from config.tags_config import PLC_TAGS
 
 telemetry_bp = Blueprint('telemetry', __name__)
@@ -48,7 +62,7 @@ def handle_connect():
 
 
 # ──────────────────────────────────────────────────────────────────────
-# BIT READ/WRITE  (DB-backed — only call these for actual DB tags)
+# BIT READ/WRITE  (DB-backed)
 # ──────────────────────────────────────────────────────────────────────
 @telemetry_bp.route('/api/read', methods=['POST'])
 def handle_read_bit():
@@ -80,7 +94,30 @@ def handle_write_bit():
 
 
 # ──────────────────────────────────────────────────────────────────────
-# ANALOG READ  (DB-backed — only call for actual DB REAL tags)
+# TAG-NAME WRITE — frontend writes by tag_id, db/offset looked up from
+# config/tags_config.py. This is the endpoint synoptic.js's
+# HmiApp.triggerWriteByTag() calls — see main/static/js/hmi-app.js.
+# Unlike /api/write above, this refuses any tag not explicitly marked
+# "writable": True in tags_config.py, so a misconfigured or read-only
+# tag can never be written by accident from a stale frontend button.
+# ──────────────────────────────────────────────────────────────────────
+@telemetry_bp.route('/api/write-tag', methods=['POST'])
+def handle_write_tag():
+    data = request.get_json() or {}
+    tag_id = data.get('tag_id')
+    value = data.get('value')
+    if tag_id is None or value is None:
+        return jsonify({"status": "error", "message": "Missing tag_id or value"}), 400
+
+    if not plc_service.is_connected:
+        return jsonify({"status": "error", "message": "PLC offline"}), 503
+
+    success, msg = write_tag_by_id(tag_id, value, PLC_TAGS)
+    return jsonify({"status": "success" if success else "error", "message": msg})
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ANALOG READ  (DB-backed REAL tags)
 # ──────────────────────────────────────────────────────────────────────
 @telemetry_bp.route('/api/read-analog', methods=['POST'])
 def handle_read_analog():
@@ -97,73 +134,22 @@ def handle_read_analog():
 
 
 # ──────────────────────────────────────────────────────────────────────
-# BULK TELEMETRY — I/Q Area reads only, NetToPLCSim safe
+# BULK TELEMETRY — now 100% DB2, via telemetry_reader.read_all_tags()
 # ──────────────────────────────────────────────────────────────────────
 @telemetry_bp.route('/api/telemetry', methods=['GET'])
 def get_bulk_telemetry():
     """
-    Reads I/Q hardware tags via read_area().
-    Tags must have "area": "I" or "area": "Q" in tags_config.
-    DB tags (area "DB") are explicitly unsupported here — use /api/read-analog
-    or /api/read for individual DB reads.
+    Reads every enabled tag in PLC_TAGS via telemetry_reader.read_all_tags().
+    All tags are DB2-based — see config/tags_config.py for the full map.
 
-    S7 area codes:
-        0x81 = Process Inputs  (%I / %IW)
-        0x82 = Process Outputs (%Q / %QW)
+    Per-tag read failures do not fail the whole request — a failed tag
+    comes back as None in the response (read_all_tags() logs the
+    underlying exception with tag id / db / offset / type for debugging).
     """
     if not plc_service.is_connected:
         return jsonify({"status": "error", "message": "PLC offline"}), 503
 
-    telemetry_data = {}
-
-    for component in PLC_TAGS:
-        comp_id = component['component_id']
-        for var_key, var_meta in component['variables'].items():
-
-            tag_id    = f"{comp_id}-{var_key}"
-            tag_type  = var_meta['type']
-            offset_str = str(var_meta['offset'])
-            area_letter = var_meta.get('area', 'I').upper()
-
-            # Guard: skip any tag that accidentally still references a DB
-            if area_letter not in ('I', 'Q'):
-                print(f"⚠️  Skipping [{tag_id}]: area='{area_letter}' is not I or Q — "
-                      f"DB reads must use /api/read or /api/read-analog")
-                telemetry_data[tag_id] = None
-                continue
-
-            # S7 area code
-            s7_area = 0x82 if area_letter == 'Q' else 0x81
-
-            # Parse byte / bit index from offset string
-            if '.' in offset_str:
-                byte_idx = int(offset_str.split('.')[0])
-                bit_idx  = int(offset_str.split('.')[1])
-            else:
-                byte_idx = int(offset_str)
-                bit_idx  = 0
-
-            try:
-                if tag_type in ('INT', 'WORD'):
-                    # %IW / %QW — read 2 bytes (always even, PLCSim safe)
-                    raw = plc_service.client.read_area(s7_area, 0, byte_idx, 2)
-                    fmt = '>H' if tag_type == 'WORD' else '>h'
-                    telemetry_data[tag_id] = int(struct.unpack(fmt, bytes(raw[:2]))[0])
-
-                elif tag_type == 'BOOL':
-                    # %I / %Q — read the containing byte, extract the bit
-                    raw = plc_service.client.read_area(s7_area, 0, byte_idx, 1)
-                    telemetry_data[tag_id] = bool((raw[0] >> bit_idx) & 0x01)
-
-                else:
-                    print(f"⚠️  [{tag_id}]: unsupported type '{tag_type}' for I/Q area read")
-                    telemetry_data[tag_id] = 0
-
-            except Exception as io_err:
-                print(f"⚠️  Error polling [{tag_id}] "
-                      f"area={area_letter} offset={offset_str}: {io_err}")
-                telemetry_data[tag_id] = None
-
+    telemetry_data = read_all_tags(PLC_TAGS)
     return jsonify(telemetry_data)
 
 
@@ -178,7 +164,7 @@ def diag_db_dump():
     to stay within NetToPLCSim PDU limits.
     """
     data   = request.get_json() or {}
-    db     = int(data.get('db',     51))
+    db     = int(data.get('db',     2))
     start  = int(data.get('start',  0))
     length = int(data.get('length', 8))
 

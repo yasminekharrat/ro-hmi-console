@@ -1,31 +1,48 @@
 # Thermeco Industrie SCADA/HMI — Project Overview & Known Issues
 
-Last updated: 2026-06-21 (rev. 3 — route collision fixes documented, full API surface added)
+Last updated: 2026-06-25 (rev. 4 — telemetry layer moved entirely off I/Q
+areas onto DB2; tags_config.py is now the single source of truth for both
+reads and writes; telemetry_reader.py and the write-by-tag path are new)
 
 This document explains what the system currently does, how the pieces fit
 together, and — most importantly — what's fragile, incomplete, or risky
 enough to need attention before this runs an actual plant unattended.
 
-> **What changed in this revision (rev. 3):**
-> - **Issue #0 is partially resolved.** `/api/write` and `/api/connect` were the
->   two confirmed route collisions between `telemetry_bp` and `vfd_blueprint`.
->   Both are now renamed in `vfd_routes.py`: `/api/write` → `/api/vfd-write`,
->   `/api/connect` → `/api/vfd-connect`. The full API surface table in §5a now
->   reflects these names.
-> - **A third partial collision remains:** `/api/read` exists in both blueprints
->   but on different HTTP methods (POST in telemetry, GET in vfd). Flask routes
->   these correctly without crashing, but it is still confusing — see updated
->   Issue #0 below.
-> - **`/api/update-settings` naming corrected.** The previous revision's §6a
->   described the VFD settings endpoint as `/api/vfd/update-settings` — the
->   actual route in `vfd_routes.py` is `/api/update-settings`. If
->   `view_engineering.html` currently calls `/api/vfd/update-settings`, that
->   call will 404.
-> - **Full VFD API surface documented** for the first time (§5a) — several
->   routes (`/api/monitor`, `/api/raw`, `/api/read-params`, `/api/write-param`,
->   `/api/scan-hardware`, `/api/auto-link`) were not mentioned in any previous
->   revision.
-> - Navigation model and §4/§6a content carried forward unchanged from rev. 2.
+> **What changed in this revision (rev. 4):**
+> - **All telemetry tags moved off physical I/Q areas onto DB2.** Every tag
+>   in `config/tags_config.py` is now `"area": "DB", "db": 2` with a real
+>   (or explicitly placeholder) byte offset, matching the TIA Portal
+>   "Declaration hmi [DB2]" variable table. `client.read_area()` is no
+>   longer used anywhere in the telemetry path — see §5b.
+> - **`main/services/telemetry_reader.py` now actually exists.** Rev. 3
+>   described this file as already factored out; it was not. It has now
+>   been written from scratch: a pure function (`read_all_tags()`) that
+>   walks `PLC_TAGS` and dispatches each tag to the matching typed
+>   `plc_service` reader. `routes/telemetry.py`'s `/api/telemetry` is now a
+>   thin wrapper around it, as rev. 3 originally (inaccurately) claimed.
+> - **`tags_config.py` was reorganized** into named functional groups that
+>   mirror the DB2 layout (setpoints, alarm thresholds, manual buttons,
+>   etc.), plus a second set of groups (`instruments`, `sand_filter`,
+>   `cartridge_filters`, `feed_pump`, `hp_pump`, `tanks`,
+>   `global_management`) whose component/variable names are copied
+>   **exactly** from what `synoptic.js` reads and writes. See §5c for the
+>   full convention (`enabled`, `writable`, placeholder `offset: None`).
+> - **New write path: `/api/write-tag` + `write_tag_by_id()`.** Previously
+>   `synoptic.js` hardcoded `HmiApp.triggerWrite(50, '20.0', true)`-style
+>   calls — raw DB/offset pairs aimed at **DB50**, a different DB than
+>   everything else in the system. All 9 of these call sites (pump
+>   start/stop, auto/manual mode, backwash settings/trigger) have been
+>   rewired to `HmiApp.triggerWriteByTag('tag-name', value)`, which calls
+>   the new `/api/write-tag` endpoint. The backend looks up `db`/`offset`/
+>   `type` from `tags_config.py` and refuses the write unless the tag is
+>   explicitly marked `"writable": True`. See §5d.
+> - **The old `/api/write` and `/api/connect` (telemetry_bp) are
+>   untouched** — rev. 3's collision fixes against `vfd_blueprint` still
+>   stand as documented below. Nothing in this revision changed VFD
+>   routing, the alarm engine, or the navigation/tab-bar issues from §4/§4a/
+>   §6a — all of that is carried forward unchanged and still open.
+> - **Two real data-integrity issues surfaced and were fixed or flagged
+>   during the DB2 transcription** — see new §6, Issue #10.
 
 ---
 
@@ -109,13 +126,18 @@ look like a Siemens SIMATIC Comfort Panel. It does three jobs:
 
 1. **Telemetry** — polls a PLC over S7 (via `python-snap7`) every 500ms and
    displays pump states, tank levels, pressures, flows, and conductivity on
-   a synoptic (process flow diagram) view.
+   a synoptic (process flow diagram) view. **As of rev. 4, every tag lives
+   in DB2** — see §5b. There is no physical I/Q polling left in the
+   telemetry path.
 2. **VFD control** — talks Modbus RTU over RS-485 to a Veichi AC10 variable
    frequency drive (the HP pump's speed controller), as an isolated module
-   with its own register map and serial connection.
+   with its own register map and serial connection. Unchanged this
+   revision.
 3. **Alarm dispatch** — independently polls the same PLC tags against
    a declarative rule set and sends WhatsApp text alerts when a fault
-   condition transitions from clear to active.
+   condition transitions from clear to active. Unchanged this revision —
+   `alarm_config.py` still defines its own rule set independently of
+   `tags_config.py` (see Issue #1, still open).
 
 ---
 
@@ -140,7 +162,8 @@ switching, no page reload.
 
 ### 4a. The VFD tab → inline panel migration (in progress)
 
-This is **mid-migration**, not finished:
+This is **mid-migration**, not finished, and **untouched by this
+revision**:
 
 - `tab_bar.html` **still contains** an `<a href="/modules/vfd/vfd-panel.html">`
   full-page-navigation link (`btn-tab-vfd`) as a fallback.
@@ -168,8 +191,10 @@ app.py                              Composition root: creates the Flask app,
 routes/
 └── telemetry.py                    Generic PLC I/O blueprint (telemetry_bp).
                                     No url_prefix — routes live at /api/*.
-                                    Bit read/write, analog read, bulk area
-                                    poll, raw DB diagnostic dump.
+                                    REV. 4: bulk telemetry now delegates to
+                                    telemetry_reader.read_all_tags() instead
+                                    of looping with client.read_area() inline.
+                                    New /api/write-tag endpoint added — see §5d.
 
 modules/
 ├── vfd/
@@ -178,58 +203,82 @@ modules/
 │   │                                (see §5a for full surface and collision
 │   │                                status). Owns its own Modbus/serial
 │   │                                connection and register maps.
+│   │                                UNCHANGED this revision.
 │   ├── vfd-panel.html               Standalone page — still the only
-│   │                                 working VFD UI (see §4a).
+│   │                                 working VFD UI (see §4a). UNCHANGED.
 │   └── vfd_comms.js                 VFD page's frontend controller.
-│                                    ⚠ Must be updated: any call to
-│                                    '/api/write' → '/api/vfd-write';
+│                                    ⚠ STILL outstanding from rev. 3: any
+│                                    call to '/api/write' → '/api/vfd-write';
 │                                    any call to '/api/connect' →
-│                                    '/api/vfd-connect'.
+│                                    '/api/vfd-connect'. Not addressed this
+│                                    revision — this file was not touched.
 │
-└── alarms/
-    ├── __init__.py
-    ├── alarm_config.py              Declarative alarm rules — edit this to
-    │                                 add/remove/retune alarms, no code change.
-    ├── alarm_engine.py               Background poll loop + WhatsApp dispatch
-    │                                 via Selenium. Runs independently of any
-    │                                 browser tab.
-    ├── alarm_routes.py               Alarm blueprint (alarm_blueprint).
-    │                                 url_prefix="/api/alarms". All alarm
-    │                                 endpoints live at /api/alarms/*.
-    ├── alarm-panel.html              View shown by the Alarmes tab.
-    └── alarm_comms.js                Alarm tab's frontend controller.
+└── alarms/                         UNCHANGED this revision. All of rev. 3's
+    ├── __init__.py                 Issues #1, #2, #3, #6, #7 below still
+    ├── alarm_config.py              apply exactly as written.
+    ├── alarm_engine.py
+    ├── alarm_routes.py
+    ├── alarm-panel.html
+    └── alarm_comms.js
 
 config/
-└── tags_config.py                   PLC_TAGS: the single source of truth for
-                                    every readable point.
+└── tags_config.py                   PLC_TAGS: the single source of truth
+                                    for every readable AND writable point.
+                                    REV. 4: fully reorganized — see §5c.
+                                    95 variables defined across 20 component
+                                    groups; 43 enabled with real DB2 offsets,
+                                    52 are named placeholders awaiting real
+                                    offsets (enabled: False, offset: None).
+                                    7 are marked writable: True.
 
 main/
 ├── services/
 │   ├── plc_service.py                Singleton holding the snap7 client,
 │   │                                  is_connected flag, and low-level
 │   │                                  read_bit/write_bit/read_real/
-│   │                                  read_db_block methods.
-│   └── telemetry_reader.py           Shared S7 area-read loop, factored
-│                                      out of routes/telemetry.py.
+│   │                                  read_db_block methods. UNCHANGED —
+│   │                                  still only DB-area methods; no
+│   │                                  write_dint or write_word exist yet
+│   │                                  (see Issue #11, new this revision).
+│   └── telemetry_reader.py           REV. 4: NEWLY WRITTEN. Rev. 3 claimed
+│                                      this already existed as "S7 area-read
+│                                      loop, factored out of telemetry.py" —
+│                                      it did not exist in the codebase.
+│                                      Now contains:
+│                                        - read_all_tags(tags_config) — walks
+│                                          PLC_TAGS, dispatches each enabled
+│                                          tag to the matching typed
+│                                          plc_service reader, returns a flat
+│                                          {tag_id: value} dict. Per-tag read
+│                                          failures return None and log a
+│                                          warning; they do not abort the
+│                                          batch.
+│                                        - find_tag(tag_id) — looks up a
+│                                          single tag's full metadata dict.
+│                                        - write_tag_by_id(tag_id, value) —
+│                                          the backing function for
+│                                          /api/write-tag. See §5d.
 │
 ├── templates/
-│   ├── index.html                    Page shell. ⚠ Confirm
-│   │                                  view_engineering.html is actually
-│   │                                  {% include %}'d here (see §6a).
+│   ├── index.html                    Page shell. ⚠ STILL not confirmed:
+│   │                                  whether view_engineering.html is
+│   │                                  actually {% include %}'d here (see
+│   │                                  §6a). Not addressed this revision.
 │   └── components/
 │       ├── header.html
 │       ├── tab_bar.html               3-tab model + VFD fallback link.
+│       │                              UNCHANGED.
 │       ├── synoptic_canvas.html       SVG technical drawing + HTML overlay.
-│       ├── view_engineering.html      NEW — Configuration tab content.
-│       │                              ⚠ Calls /api/update-settings for VFD
-│       │                              settings (NOT /api/vfd/update-settings
-│       │                              — that path does not exist). Also
-│       │                              calls /api/engineering/calibration
-│       │                              and /api/connect for PLC — the
-│       │                              calibration endpoint does not exist
-│       │                              yet (see §6a).
-│       ├── view_dataview.html         Raw tag grid. No tab button.
-│       ├── view_settings.html         RETIRED — safe to delete.
+│       │                              UNCHANGED this revision — every id
+│       │                              synoptic.js reads/writes was already
+│       │                              verified present exactly once (rev. 3).
+│       ├── view_engineering.html      Configuration tab content. UNCHANGED
+│       │                              this revision — all of rev. 3's ⚠
+│       │                              notes about /api/update-settings and
+│       │                              /api/engineering/calibration still
+│       │                              apply exactly as written (see §6a).
+│       ├── view_dataview.html         Raw tag grid. No tab button. UNCHANGED.
+│       ├── view_settings.html         RETIRED — safe to delete. UNCHANGED.
 │       ├── event_logger.html
 │       ├── detail_panel.html
 │       ├── backwash_modal.html
@@ -240,14 +289,41 @@ main/
     ├── css/
     │   ├── hmi-styles.css
     │   └── synoptic.css              Old .loc-* pixel rules are dead code.
+    │                                 UNCHANGED.
     └── js/
-        ├── hmi-app.js                Master controller + duplicate alarm eval.
+        ├── hmi-app.js                Master controller + duplicate alarm
+        │                             eval (Issue #1, still open, unchanged).
+        │                             REV. 4: added triggerWriteByTag(tagId,
+        │                             value) alongside the existing
+        │                             triggerWrite(db, offset, value). The
+        │                             old method is left in place — nothing
+        │                             else in this codebase calls it anymore
+        │                             after this revision's synoptic.js
+        │                             changes, but it has not been deleted
+        │                             in case vfd_comms.js or another file
+        │                             still depends on it (not checked this
+        │                             revision).
         ├── synoptic.js               Renderer + tab switching. 'engineering'
-        │                             now in showView() array (fixed, §6a).
-        └── hmi-comms.js              Thin fetch() wrapper.
-                                      ⚠ Must be updated: any call to
+        │                             in showView() array (fixed rev. 2,
+        │                             unchanged). REV. 4: all 9 write call
+        │                             sites (feed pump on/off, HP pump
+        │                             on/off, auto/manual mode, backwash ΔP/
+        │                             duration/manual-trigger) rewired from
+        │                             hardcoded triggerWrite(50, 'X.X', val)
+        │                             to triggerWriteByTag('tag-name', val).
+        │                             Zero hardcoded db/offset writes remain
+        │                             in this file. Diagnostic dump default
+        │                             DB changed 51 → 2 to match the rest of
+        │                             the system.
+        └── hmi-comms.js              Thin fetch() wrapper. ⚠ STILL
+                                      outstanding from rev. 3: any call to
                                       '/api/write' → '/api/vfd-write';
-                                      '/api/connect' (VFD) → '/api/vfd-connect'.
+                                      '/api/connect' (VFD) →
+                                      '/api/vfd-connect'. Not addressed this
+                                      revision — this file was not touched,
+                                      and is unrelated to the new
+                                      /api/write-tag path (different
+                                      blueprint, different purpose).
 ```
 
 ---
@@ -257,17 +333,17 @@ main/
 | File | Responsibility | Owns state? |
 |---|---|---|
 | `app.py` | Wires blueprints together, starts background services | App-level only |
-| `routes/telemetry.py` | HTTP surface for PLC reads/writes | No (delegates to `plc_service`) |
+| `routes/telemetry.py` | HTTP surface for PLC reads/writes | No (delegates to `plc_service` / `telemetry_reader`) |
 | `main/services/plc_service.py` | The actual S7 client connection | **Yes** — `is_connected`, snap7 client |
-| `main/services/telemetry_reader.py` | One shared "read all tags" function | No (pure function over `plc_service`) |
-| `config/tags_config.py` | Defines what tags exist | **Yes** — the canonical tag map |
+| `main/services/telemetry_reader.py` | Bulk read loop + tag-name write lookup, over `tags_config.py` | No (pure functions over `plc_service` + `PLC_TAGS`) |
+| `config/tags_config.py` | Defines what tags exist, their DB2 address, and which are writable | **Yes** — the canonical tag map, now also the canonical write-permission map |
 | `modules/vfd/vfd_routes.py` | HTTP surface + register maps for the VFD | **Yes** — separate Modbus connection, `vfd_settings`, telemetry counters |
 | `modules/alarms/alarm_config.py` | Defines what counts as an alarm | **Yes** — the canonical rule map |
 | `modules/alarms/alarm_engine.py` | Detects + dispatches alarms | **Yes** — `active_alarms`, `recent_log`, WhatsApp Selenium session |
 | `modules/alarms/alarm_routes.py` | HTTP surface for the alarm tab | No (delegates to `alarm_engine`) |
 | `main/templates/components/view_engineering.html` | Configuration tab UI + `EngineeringPanel` JS controller | No (calls backend endpoints — some missing, see §6a) |
-| `main/static/js/hmi-app.js` | Frontend poll loop + **duplicate** alarm evaluation | **Yes** — `activeAlarms` (frontend copy) |
-| `main/static/js/synoptic.js` | Renders telemetry onto the diagram, tab switching, panels | No (pure render over data passed in) |
+| `main/static/js/hmi-app.js` | Frontend poll loop + duplicate alarm evaluation + write dispatch (`triggerWrite`, `triggerWriteByTag`) | **Yes** — `activeAlarms` (frontend copy) |
+| `main/static/js/synoptic.js` | Renders telemetry onto the diagram, tab switching, panels, write-button wiring | No (pure render over data passed in; writes go through `HmiApp`) |
 
 ---
 
@@ -275,6 +351,8 @@ main/
 
 This is the authoritative list of every HTTP endpoint registered in the
 application, based on the actual route decorators in each file.
+**Unchanged from rev. 3 except where marked REV. 4 below** — VFD and alarm
+blueprints were not touched this revision.
 
 ### telemetry_bp (no url_prefix)
 
@@ -283,24 +361,26 @@ application, based on the actual route decorators in each file.
 | GET | `/api/tags-config` | `get_tags` | Returns `PLC_TAGS` to the frontend |
 | POST | `/api/connect` | `handle_connect` | Connects snap7 client to PLC `{ip}` |
 | POST | `/api/read` | `handle_read_bit` | Read single PLC bit `{db, offset}` |
-| POST | `/api/write` | `handle_write_bit` | Write single PLC bit `{db, offset, value}` |
+| POST | `/api/write` | `handle_write_bit` | Write single PLC bit `{db, offset, value}` — raw, trusts caller-supplied db/offset, NOT looked up from `tags_config.py`. Still used by VFD "Tester Connexion" wiring per rev. 3 notes. |
 | POST | `/api/read-analog` | `handle_read_analog` | Read single DB REAL `{db, offset}` |
-| GET | `/api/telemetry` | `get_bulk_telemetry` | Bulk I/Q area poll for all tags |
-| POST | `/api/diag/db-dump` | `diag_db_dump` | Dev tool: raw DB byte dump `{db, start, length}` |
+| GET | `/api/telemetry` | `get_bulk_telemetry` | **REV. 4:** Bulk poll, now calls `telemetry_reader.read_all_tags(PLC_TAGS)` — no more inline `read_area()` loop, no more I/Q area codes anywhere in this handler |
+| POST | `/api/write-tag` | `handle_write_tag` | **NEW, REV. 4.** `{tag_id, value}` → looks up `db`/`offset`/`type` from `PLC_TAGS`, refuses unless the tag has `"writable": True` and `"enabled": True`. See §5d. |
+| POST | `/api/diag/db-dump` | `diag_db_dump` | Dev tool: raw DB byte dump `{db, start, length}`. **REV. 4:** default `db` changed from `51` → `2` |
 
 Also registered on `app.py` directly (not in a blueprint):
 
 | Method | Path | Handler | Purpose |
 |---|---|---|---|
-| GET | `/api/tags-config` | `get_tags_config` | **Duplicate** of `telemetry_bp`'s route — `app.py` registers this separately. Flask will use whichever was registered last. Consolidate to one. |
+| GET | `/api/tags-config` | `get_tags_config` | **Duplicate** of `telemetry_bp`'s route — still unresolved, see Issue #0 below, unchanged this revision |
 | GET | `/` | `index` | Main HMI page |
 
-### vfd_blueprint (no url_prefix)
+### vfd_blueprint (no url_prefix) — UNCHANGED THIS REVISION
 
 > **Collision history:** `/api/write` and `/api/connect` were renamed in this
 > blueprint to resolve hard Flask startup collisions with `telemetry_bp`.
 > Update any frontend code (`vfd_comms.js`, `hmi-comms.js`) that still
-> calls the old paths.
+> calls the old paths. **Still not done as of rev. 4** — `vfd_comms.js`
+> and `hmi-comms.js` were not part of this revision's scope.
 
 | Method | Path | Handler | Purpose | Collision status |
 |---|---|---|---|---|
@@ -313,12 +393,12 @@ Also registered on `app.py` directly (not in a blueprint):
 | POST | `/api/raw` | `api_raw_transfer` | FC03 read or FC06/16 write at any address | ✅ Unique |
 | GET | `/api/read-params` | `api_read_params` | Read all F01 / F12 / F13 parameter registers | ✅ Unique |
 | POST | `/api/write-param` | `api_write_param` | Write a single named F-parameter by key | ✅ Unique |
-| POST | `/api/update-settings` | `api_update_settings` | Update VFD port/baud/slave and re-init | ⚠ Unique in backend, but `view_engineering.html` may call `/api/vfd/update-settings` (wrong path — will 404). Fix the frontend call. |
-| GET | `/api/read` | `api_read_register` | Single register debug read `?offset=0x...` | ⚠ Same path as telemetry's `/api/read` — different HTTP method (GET vs POST), so Flask routes correctly. Still confusing; rename to `/api/vfd-read` for clarity. |
+| POST | `/api/update-settings` | `api_update_settings` | Update VFD port/baud/slave and re-init | ⚠ Unique in backend, but `view_engineering.html` may call `/api/vfd/update-settings` (wrong path — will 404). Still unresolved. |
+| GET | `/api/read` | `api_read_register` | Single register debug read `?offset=0x...` | ⚠ Same path as telemetry's `/api/read` — different HTTP method (GET vs POST), Flask routes correctly. Still unresolved; rename recommendation unchanged from rev. 3. |
 | POST | `/api/scan-hardware` | `api_scan_hardware` | List available COM ports | ✅ Unique |
 | POST | `/api/auto-link` | `api_auto_link` | Auto-connect to first available COM port | ✅ Unique |
 
-### alarm_blueprint (url_prefix = `/api/alarms`)
+### alarm_blueprint (url_prefix = `/api/alarms`) — UNCHANGED THIS REVISION
 
 | Method | Path | Handler | Purpose |
 |---|---|---|---|
@@ -329,277 +409,299 @@ Also registered on `app.py` directly (not in a blueprint):
 | POST | `/api/alarms/test/<rule_id>` | `alarm_test` | Manually fire a test WhatsApp dispatch |
 | GET | `/api/alarms/wa-status` | `wa_status` | Is the WhatsApp Web session authenticated? |
 
-### Endpoints expected by frontend but not yet implemented
-
-These are called by `view_engineering.html`'s `EngineeringPanel` JS
-controller but have no handler in any blueprint:
+### Endpoints expected by frontend but not yet implemented — UNCHANGED
 
 | Path | Expected by | Status |
 |---|---|---|
 | `POST /api/engineering/calibration` | `EngineeringPanel` save | ❌ Not implemented |
-| `POST /api/update-settings` | `EngineeringPanel` PLC comms save | ✅ Exists in `vfd_blueprint` — but this saves VFD serial settings, not PLC IP/rack/slot. A separate PLC settings endpoint is still missing. |
+| `POST /api/update-settings` | `EngineeringPanel` PLC comms save | ✅ Exists in `vfd_blueprint` — but saves VFD serial settings, not PLC IP/rack/slot. Separate endpoint still missing. |
+
+---
+
+## 5b. DB2 migration — what actually changed and why
+
+Before rev. 4, `tags_config.py` mixed physical I/Q tags (`"area": "I"` /
+`"area": "Q"`, read via `client.read_area()`) with nothing from any DB. The
+PLC program has since been changed so that **every signal the HMI needs now
+lives in DB2** ("Declaration hmi"), confirmed directly against TIA Portal's
+variable table.
+
+Consequences of this:
+- `routes/telemetry.py`'s `/api/telemetry` no longer branches on area code
+  (`0x81`/`0x82` for I/Q) at all. It is 100% DB reads now, dispatched
+  through `plc_service`'s typed methods (`read_bit`, `read_int`,
+  `read_dint`, `read_word`, `read_real`).
+- The NetToPLCSim-safety constraints that used to apply only to `db_read()`
+  calls (even byte counts, no DB reads for I/Q tags) are now relevant to
+  *every* tag in the system, not just the diagnostic dump tool — see the
+  warning already baked into `plc_service.py`'s docstring.
+- `plc_service.py` itself was **not modified** — it already had the typed
+  DB readers/writers this migration needed (`read_bit`, `read_int`,
+  `read_dint`, `read_word`, `read_real`, `write_bit`, `write_int`,
+  `write_real`). No new methods were added to it.
+
+---
+
+## 5c. `tags_config.py` structure & editing convention (rev. 4)
+
+`config/tags_config.py` is now organized into 20 named component groups,
+falling into three categories:
+
+1. **Real, enabled tags (43 total)** — setpoints, alarm thresholds, manual
+   buttons, schedule-day bits, etc., transcribed directly from the TIA
+   Portal DB2 variable table. These have real `offset`/`type`/`db` values
+   and are actively polled by `/api/telemetry`.
+
+2. **Reserved/disabled placeholders for things deliberately NOT modeled**
+   (`schedule_RESERVED`, `unnamed_RESERVED`) — `Time_Of_Day` schedule
+   fields (custom scheduling will replace these) and two PLC variables
+   whose TIA names are literally `"1997"`/`"1998"` (unrenamed placeholders
+   in the PLC program itself, purpose unconfirmed). All have
+   `"enabled": False` so `telemetry_reader.py` skips them; their byte
+   ranges are documented so nothing else gets assigned on top of them by
+   mistake.
+
+3. **Placeholder groups for tags `synoptic.js` needs but that don't exist
+   in DB2 yet** (`instruments`, `sand_filter`, `cartridge_filters`,
+   `feed_pump`, `hp_pump`, `tanks`, `global_management`) — 38 variable
+   names, copied character-for-character from `synoptic.js`'s
+   `updateSynoptic()` and `_panelConfig` (e.g. `data['feed_pump-cmd']`,
+   `bool('hp_pump-fault')`). Every one of these currently has
+   `"offset": None, "type": None, "enabled": False`. They exist purely as
+   name reservations so that once the live process values are added to
+   DB2, filling in `offset`/`type` and removing `enabled: False` is the
+   *only* change needed — no renaming in any JS file, ever.
+
+**Editing convention, going forward:**
+- `"enabled": False` (or omitted defaults to `True`) → `telemetry_reader.py`
+  skips this tag entirely; it will not appear in `/api/telemetry`'s
+  response at all, not even as `null`.
+- `"writable": True` → this tag may be written via `/api/write-tag`; see
+  §5d. Tags without this key default to read-only.
+- BOOL tags use `"offset": "byte.bit"` (e.g. `"150.1"`); INT/WORD use a
+  byte offset only (2-byte width); DINT/REAL use a byte offset only
+  (4-byte width). Check neighboring tags for overlap before assigning a
+  real offset — `plc_service.py` will round odd byte-counts up for safety,
+  which can silently extend a read into the next tag's bytes if offsets
+  are packed too tightly.
+- `"type"` must be one of `BOOL`, `INT`, `DINT`, `WORD`, `REAL` for reads.
+  For writes, only `BOOL`, `INT`, `REAL` are currently supported — see
+  Issue #11.
+
+---
+
+## 5d. Write-by-tag path (new, rev. 4)
+
+**Problem this solves:** before this revision, 7 of `synoptic.js`'s action
+buttons (feed pump start/stop, HP pump start/stop, auto/manual mode,
+backwash ΔP threshold, and 2 backwash actions with no prior read-side tag
+at all) called `HmiApp.triggerWrite(50, '<offset>', value)` directly —
+hardcoding **DB50**, not DB2, with no relationship to `tags_config.py`
+whatsoever. Editing `tags_config.py` would never have changed where these
+writes actually landed.
+
+**How it works now:**
+1. `synoptic.js`'s `_panelConfig` action buttons and the backwash-modal
+   methods (`applyBackwashSettings`, `startManualBackwash`) call
+   `HmiApp.triggerWriteByTag('tag-name', value)` instead of
+   `HmiApp.triggerWrite(db, offset, value)`.
+2. `triggerWriteByTag` (new method in `hmi-app.js`) POSTs
+   `{tag_id, value}` to `/api/write-tag`.
+3. `handle_write_tag` (new route in `routes/telemetry.py`) calls
+   `write_tag_by_id(tag_id, value, PLC_TAGS)`.
+4. `write_tag_by_id` (new function in `telemetry_reader.py`) looks up the
+   tag's `db`/`offset`/`type`/`writable`/`enabled` from `PLC_TAGS` and:
+   - refuses if the tag_id isn't found at all,
+   - refuses if `"enabled": False`,
+   - refuses if `"writable"` isn't `True`,
+   - refuses if the tag's `type` has no corresponding `plc_service`
+     write method (see Issue #11),
+   - otherwise dispatches to the correct typed writer and returns
+     `(True, "DB{db}.{offset} ({tag_id}) = {value}")`.
+
+**7 tags currently marked `"writable": True`** (all still `"enabled": False`
+pending real DB2 offsets):
+- `feed_pump-cmd`
+- `hp_pump-cmd`
+- `global_management-auto`
+- `global_management-manual`
+- `sand_filter-dp_max`
+- `sand_filter-backwash_duration` *(new tag, no read-side equivalent existed before)*
+- `sand_filter-manual_backwash_trigger` *(new tag, no read-side equivalent existed before)*
+
+**The old `/api/write` (`{db, offset, value}`, raw, no tag lookup) was left
+completely untouched** — it's still used elsewhere (VFD "Tester Connexion"
+wiring per rev. 3), and changing its contract was out of scope. The two
+write paths now coexist: `/api/write` for anything that still needs raw
+db/offset, `/api/write-tag` for anything that should be governed by
+`tags_config.py`.
 
 ---
 
 ## 6. Known issues / things to fix
 
 Ordered roughly by how much it matters for a system that's supposed to
-alert someone about a real fault.
+alert someone about a real fault. **Issues #0 through #9 are carried
+forward unchanged from rev. 3** unless marked otherwise — none of that
+underlying code was touched this revision. Two new issues (#10, #11) were
+surfaced by the DB2 transcription and write-by-tag work.
 
-### Issue #0 — Route collisions (partially resolved, one remaining)
+### Issue #0 — Route collisions (partially resolved, one remaining) — UNCHANGED
 
 **Resolved in rev. 3:**
 - `/api/write` — renamed to `/api/vfd-write` in `vfd_routes.py`. ✅
 - `/api/connect` — renamed to `/api/vfd-connect` in `vfd_routes.py`. ✅
 
-**Frontend must be updated:** any call to the old paths in `vfd_comms.js`
-or `hmi-comms.js` will now 404. Search for `'/api/write'` and
-`'/api/connect'` in all JS files and update to the new names. The
-Engineering Controls tab's "Tester Connexion" button calls `/api/connect`
-with `{ip}` — this should hit `telemetry_bp`'s handler (correct), but
-verify no VFD-connect logic was accidentally wired to the same button.
+**Frontend must still be updated:** any call to the old paths in
+`vfd_comms.js` or `hmi-comms.js` will 404. Not addressed this revision.
 
-**Still open — `/api/read` (low severity):**
-- `telemetry_bp`: `POST /api/read` — payload `{db, offset}` → reads a PLC
-  DB bit.
-- `vfd_blueprint`: `GET /api/read` — query param `?offset=0x...` → reads a
-  Modbus register.
+**Still open — `/api/read` (low severity), `/api/update-settings` naming
+mismatch, duplicate `/api/tags-config` registration:** all exactly as
+described in rev. 3, unchanged.
 
-Flask correctly dispatches these by HTTP method, so there is no startup
-crash and no silent shadowing. However, the shared path is confusing and
-fragile if either handler ever needs to add the other's method. **Fix
-direction:** rename the VFD handler to `GET /api/vfd-read` to match the
-convention already established by `/api/vfd-write` and `/api/vfd-connect`.
+### 6a. Issues introduced or surfaced by the tab bar restructure — UNCHANGED
 
-**Still open — `/api/update-settings` naming mismatch:**
-The VFD blueprint registers this as `POST /api/update-settings`. The
-previous overview revision (and likely `view_engineering.html`) referenced
-it as `/api/vfd/update-settings` — a path that does not exist and will
-return 404. **Fix direction:** update `view_engineering.html`'s
-`EngineeringPanel` to call `/api/update-settings` (the actual path), or
-rename the route to `/api/vfd/update-settings` to match the expectation.
-Either is fine; just make the two sides agree.
+All items from rev. 3 (VFD migration half-done, missing Engineering
+Controls backend endpoints, `view_dataview.html` has no tab button,
+orphaned `view_settings.html`, unconfirmed `index.html` include) remain
+exactly as described. None of this was in scope this revision.
 
-**Still open — duplicate `/api/tags-config` registration:**
-Both `telemetry_bp` and `app.py` register a `GET /api/tags-config` route.
-Flask will use whichever was registered last (blueprint before direct
-routes in the current `app.py` order, so `app.py`'s handler wins). Both
-return `PLC_TAGS`, so functionally identical right now — but this is
-fragile. Remove the one from `app.py` and let the blueprint own it.
+### Issue #1 — Alarm logic now exists in two places, and they can disagree — UNCHANGED
 
-### 6a. Issues introduced or surfaced by the tab bar restructure
+`hmi-app.js`'s `_evalAlarms()` vs. `modules/alarms/alarm_config.py` still
+disagree independently. **Worth flagging explicitly now that `tags_config.py`
+is the single source of truth for telemetry:** `alarm_config.py` is a
+*separate* rule map that does not read from `tags_config.py` — a tag
+renamed or re-offset in `tags_config.py` will not automatically update any
+alarm rule that references it by name. This was already true before rev. 4
+but is easier to miss now that tags_config.py *looks* authoritative for
+everything.
 
-**Fixed during rev. 2:**
-- **`showView()` was missing `'engineering'` from its view-id array.**
-  Confirmed fixed by adding `'engineering'` to that array in `synoptic.js`.
+### Issue #2 through #9 — UNCHANGED
 
-**Still open:**
-- **VFD migration is half-done (§4a).** The HP pump's `onclick` calls
-  `showView('vfd')`, which is not a real view in the 3-tab model. Clicking
-  the pump does nothing. The tab bar's `<a href>` fallback to
-  `vfd-panel.html` is the only working VFD path until the inline panel is
-  built.
-- **`view_engineering.html`'s backend endpoints are partially missing.**
-  `/api/engineering/calibration` does not exist. `/api/update-settings`
-  does exist (VFD serial settings) but is not the same as a PLC IP/rack/
-  slot config endpoint. `/api/vfd/update-settings` — as referenced in the
-  previous overview — does not exist; the actual path is
-  `/api/update-settings`. The Save/Test buttons will fail until these are
-  reconciled.
-- **`view_dataview.html` has no tab button.** Needs either a 4th button
-  or a link from within Engineering Controls, or retire it.
-- **`view_settings.html` is now orphaned.** Confirm nothing includes it,
-  then delete it.
-- **Confirm `index.html` actually includes `view_engineering.html`.**
-  If the `{% include %}` is missing, the Configuration tab will remain
-  blank despite the JS fix being correct.
+Selenium/WhatsApp fragility, no persistence, `debug=True` risk, no
+authentication, alarm/telemetry poll interval mismatch, silent
+`evaluate_condition` no-op, inconsistent error shapes, hardcoded phone
+numbers/IPs — all exactly as described in rev. 3. None were in scope this
+revision.
 
-### Issue #1 — Alarm logic now exists in two places, and they can disagree
-**Where:** `hmi-app.js`'s `_evalAlarms()` vs. `modules/alarms/alarm_config.py`
+### Issue #10 — DB2 transcription gaps (new, rev. 4)
 
-The frontend runs its own hardcoded threshold checks and writes them to
-the on-screen event log only. The backend engine runs a separately-
-maintained set of the same checks and is the one that sends WhatsApp
-messages. If someone tunes a threshold in one place and not the other, the
-on-screen log and the WhatsApp alert will disagree — dangerous in a safety
-system.
+**Where:** `config/tags_config.py`
 
-**Fix direction:** delete `_evalAlarms` from `hmi-app.js` and have the
-on-screen log subscribe to `/api/alarms/log` and `/api/alarms/status`
-instead. The backend is already the authoritative source.
+Two real ambiguities surfaced while transcribing the TIA Portal DB2 table
+and were resolved or flagged rather than guessed:
+- **`lundi_hmi` vs `start_filtre_a_sable` offset collision** — both
+  initially appeared at byte 48.0 in the source screenshot. Confirmed:
+  `start_filtre_a_sable` = 48.0, `lundi_hmi` = 48.1.
+- **`entre_filtre_sable`** — the same screenshot also showed this at 48.1,
+  colliding with the corrected `lundi_hmi` offset. Left as
+  `"offset": "TBD.0"`, `"enabled": False` — a real address was never
+  confirmed. **Anyone enabling this tag must set its real offset first;
+  "TBD.0" is not a valid address.**
+- **`unnamed_1997` / `unnamed_1998`** (offsets 204, 208) — TIA shows these
+  variables' names literally as `"1997"` and `"1998"`, almost certainly
+  never renamed after creation. Left disabled pending a decision on
+  whether to rename them in TIA and document their real purpose, or
+  retire the bytes.
 
-### Issue #2 — Selenium/WhatsApp Web is a fundamentally fragile delivery channel
-**Where:** `modules/alarms/alarm_engine.py`
+**Fix direction:** resolve `entre_filtre_sable`'s real offset and rename/
+document `unnamed_1997`/`unnamed_1998` in TIA before enabling any of the
+three.
 
-This automates the WhatsApp Web browser UI — it is not the official API.
-It breaks when WhatsApp changes their DOM, violates WhatsApp's ToS, has no
-retry/backoff logic, and serializes all dispatches through a single Chrome
-session so simultaneous alarms queue up behind each other.
+### Issue #11 — `plc_service.py` has no `write_dint` or `write_word` (new, rev. 4)
 
-**Fix direction:** at minimum, add retry-with-backoff and a session watchdog.
-Longer term, evaluate the official WhatsApp Business Platform API (Meta or
-a provider like Twilio) to remove the DOM-fragility and ToS risk entirely.
+**Where:** `main/services/plc_service.py`, `main/services/telemetry_reader.py`'s `_WRITE_DISPATCH`
 
-### Issue #3 — No persistence: every list, log, and alarm state lives in memory
-**Where:** `alarm_engine.py` (`recent_log`, `active_alarms`), `vfd_routes.py`
-(telemetry counters).
+`plc_service.py` implements `write_bit`, `write_int`, `write_real` — but
+not `write_dint` or `write_word`. `telemetry_reader.write_tag_by_id()`
+already accounts for this: a tag with `"writable": True` but `"type":
+"DINT"` or `"type": "WORD"` will be cleanly refused with a clear error
+message (`"...has no write method in plc_service.py yet..."`) rather than
+crashing or silently doing the wrong thing. None of the 7 currently-writable
+tags use DINT/WORD, so this hasn't bitten yet — but it will the first time
+someone marks a DINT setpoint (e.g. one of the `temps_alarme_*_ms` timer
+fields) as writable without first adding the corresponding method to
+`plc_service.py`.
 
-A Flask restart loses the entire alarm dispatch history, active alarm state
-(causing re-notification or missed detection on restart), and VFD comms
-counters. No incident review is possible beyond what's currently in RAM.
-
-**Fix direction:** append `recent_log` entries to a flat file or SQLite as
-well as memory. SQLite is a reasonable first step — no new infra, durable
-across restarts, queryable for reporting. Natural place to also persist
-calibration offsets once `/api/engineering/calibration` is implemented.
-
-### Issue #4 — `debug=True` in production-facing code
-**Where:** `app.py`
-
-The current `app.py` already reads the debug flag from the environment:
-```python
-debug_mode = os.environ.get("DEBUG", "0").strip() in ("1", "true", "True")
-app.run(host="0.0.0.0", port=5000, debug=debug_mode)
-```
-This means `debug=False` by default unless `DEBUG=1` is set in the
-environment — an improvement over the hardcoded `debug=True` that was
-here previously. **Verify this is the version actually running.** If any
-earlier copy of `app.py` with hardcoded `debug=True` is still on the
-machine, it exposes the Werkzeug interactive debugger to anyone who can
-reach port 5000 on the LAN — effectively a remote Python shell.
-
-### Issue #5 — No authentication anywhere
-**Where:** every blueprint.
-
-Every endpoint — including `/api/control` (sends FORWARD/REVERSE/STOP/
-RESET to the VFD drive), `/api/write` (arbitrary PLC bit writes),
-`/api/vfd-write` (arbitrary Modbus register writes), and
-`/api/alarms/test/<rule_id>` (fires a real WhatsApp dispatch) — is
-unauthenticated. Combined with `CORS(app)` enabling all origins and
-`host='0.0.0.0'`, anyone who can reach port 5000 on the network can drive
-the pumps or spam the alarm WhatsApp numbers.
-
-**Fix direction:** scope CORS to known origins instead of `CORS(app)` wide
-open. Put basic auth or an API key in front of all write and control
-endpoints — including the new Engineering ones once they exist.
-
-### Issue #6 — Alarm poll interval vs. telemetry poll interval mismatch
-**Where:** `alarm_engine.py` (`POLL_INTERVAL_SECONDS = 2`) vs. `hmi-app.js`
-(`setInterval(..., 500)`).
-
-Frontend sees new data every 500ms; the alarm engine only checks every 2
-seconds. For fast-transient faults, the alarm engine could miss a trip that
-the frontend log catches — another flavor of Issue #1.
-
-**Fix direction:** decide what "fast enough" means for your actual fault
-characteristics and either match the intervals or document why they differ.
-
-### Issue #7 — `evaluate_condition` returning `None` is a silent no-op
-**Where:** `alarm_config.py`
-
-If a tag read fails or a rule has a bad threshold, `evaluate_condition`
-returns `None` and the engine holds previous state rather than guessing.
-Correct behavior — but currently fails **silently**. A typo'd tag field in
-a rule looks identical to a healthy rule that hasn't fired.
-
-**Fix direction:** track a per-rule "last successfully evaluated" timestamp
-and surface it on the alarm tab, or log a warning after N consecutive
-unevaluable polls.
-
-### Issue #8 — Inconsistent error-message shapes across blueprints
-**Where:** compare `routes/telemetry.py` (`{"status": "error", "message": ...}`)
-vs. `vfd_routes.py` (`{"status": "ERROR", "message": ...}` and
-`{"success": False, "msg": ...}` depending on the endpoint) vs.
-`alarm_routes.py` (delegates to `alarm_engine`, which returns its own shapes).
-
-Three different shapes for "this failed" means any generic frontend error
-handler has to know which endpoint family it's calling. The `EngineeringPanel`
-controller already has to check `(data.status === 'success' || data.success)`
-everywhere as a result.
-
-**Fix direction:** standardize on one shape (suggest `{"status": "success"|"error", "message": "..."}`) and migrate opportunistically when touching these files.
-
-### Issue #9 — Hardcoded phone numbers and PLC IP defaults in source
-**Where:** `alarm_engine.py` (`NUMBERS`), `routes/telemetry.py`
-(`ip = data.get('ip', '192.168.1.10')`), `vfd_routes.py` (`"port": "COM3"`).
-
-Config changes require a code edit and redeploy. WhatsApp numbers sit in
-plaintext in version control. The Engineering Controls forms are a step
-toward fixing IP/port/baud — once their backend endpoints exist, those
-values stop needing code edits. The phone number list still needs the same
-treatment.
-
-**Fix direction:** move to environment variables or a `.env`/config file
-that is gitignored, especially for the phone numbers.
+**Fix direction:** add `write_dint`/`write_word` to `plc_service.py`
+(mirroring the existing `write_int`/`write_real` pattern) before marking
+any DINT/WORD tag writable.
 
 ---
 
 ## 7. Things that are working correctly and don't need touching
 
-- The S7 area-read logic (`telemetry_reader.py`) correctly distinguishes
-  I/Q area codes, handles BOOL bit-extraction and INT/WORD struct unpacking,
-  and the PLCSim-safety constraints (even byte counts, no DB reads for I/Q
-  tags) are respected throughout.
+- The S7 area-read logic described in earlier revisions is now retired —
+  see §5b. **(rev. 4: no longer relevant; superseded by the DB2 read path.)**
 - The VFD module's `safe_write`'s FC06-then-FC16 fallback is a sensible,
-  defensive pattern for Modbus device quirks.
+  defensive pattern for Modbus device quirks. Unchanged.
 - The alarm engine's edge-triggering (`active_alarms` dict, only dispatch
   on OFF→ON transition) correctly avoids re-sending the same alarm every
-  poll cycle.
+  poll cycle. Unchanged.
 - The "hold previous state on disconnected/unreadable data" behavior in
-  both the alarm engine and `evaluate_condition` is the right call.
+  the alarm engine, and the equivalent "failed read returns None, doesn't
+  abort the batch" behavior in `telemetry_reader.read_all_tags()` (rev. 4),
+  is the right call in both places.
 - The rebuilt `synoptic_canvas.html` and its SVG/HTML-overlay split: every
   id `synoptic.js`'s `updateSynoptic()` reads or writes was verified to
-  exist exactly once.
+  exist exactly once. Unchanged this revision.
 - The `showView()` fix (§6a) is confirmed applied and working for the
-  Configuration tab.
+  Configuration tab. Unchanged.
 - The `WERKZEUG_RUN_MAIN` guard in `app.py` correctly prevents the alarm
   engine's background threads from double-starting under the debug reloader.
-- `debug` mode is now read from the `DEBUG` environment variable rather than
-  hardcoded (assuming the current `app.py` is the version running).
+  Unchanged.
+- `debug` mode is read from the `DEBUG` environment variable rather than
+  hardcoded. Unchanged.
+- **(New, rev. 4)** `telemetry_reader.write_tag_by_id()`'s refusal logic
+  (unknown tag / disabled tag / non-writable tag / unsupported type for
+  writes) was exercised directly against a mock `plc_service` and confirmed
+  to reject all four bad cases with a specific, distinguishable message,
+  and to dispatch correctly for both BOOL and REAL on the success path.
+- **(New, rev. 4)** Cross-referenced all 38 tag IDs `synoptic.js` reads
+  (`instruments-*`, `feed_pump-*`, `hp_pump-*`, `tanks-*`,
+  `sand_filter-*`, `cartridge_filters-*`, `global_management-*`) against
+  `tags_config.py` — confirmed all 38 now exist with exactly matching
+  names. Confirmed disabled placeholder tags never leak into
+  `/api/telemetry`'s response.
 
 ---
 
 ## 8. Suggested next steps, in priority order
 
-1. **Update all frontend JS for the renamed VFD routes.** Search
-   `vfd_comms.js` and `hmi-comms.js` for `/api/write` and `/api/connect`
-   and update to `/api/vfd-write` and `/api/vfd-connect`. This is a
-   prerequisite for VFD control working at all from the browser.
-
-2. **Fix the `/api/update-settings` naming mismatch.** Either update
-   `view_engineering.html` to call `/api/update-settings` (existing path),
-   or rename the route in `vfd_routes.py` to `/api/vfd/update-settings` to
-   match the frontend expectation. Pick one and make both sides consistent.
-
-3. **Rename `/api/read` (GET) in `vfd_blueprint` to `/api/vfd-read`.**
-   Eliminates the remaining same-path ambiguity with telemetry's `POST /api/read`.
-
-4. **Remove the duplicate `/api/tags-config` registration from `app.py`.**
-   Let `telemetry_bp` own it.
-
-5. **Decide and build the HP-pump → VFD path (§4a).** Either finish the
-   inline panel/modal and repoint the pump's `onclick`, or formally keep
-   `view-vfd` as a 4th in-page tab. Right now the pump click does nothing.
-
-6. **Implement the missing Engineering Controls backend endpoints.**
-   `/api/engineering/calibration` does not exist. A PLC comms config
-   endpoint (IP/rack/slot) also does not exist — `/api/update-settings`
-   saves VFD settings, not PLC settings. Implement these so the
-   Configuration tab is functional, not just visible.
-
-7. **Resolve Issue #1 (duplicate alarm logic)** — delete `_evalAlarms`
-   from `hmi-app.js` and subscribe the on-screen log to
-   `/api/alarms/status` and `/api/alarms/log`.
-
-8. **Add a minimal persistence layer for alarm history and calibration
-   offsets (Issue #3)** — SQLite is enough to start.
-
-9. **Decide on an authentication story (Issue #5)** before this is
-   reachable from more than one trusted machine.
-
-10. **Add retry/watchdog logic to the WhatsApp dispatch path (Issue #2)**,
-    or begin evaluating the official Business API as a replacement.
-
-11. **Clean up navigation loose ends:** decide where `view_dataview.html`
-    lives (or retire it), delete the orphaned `view_settings.html`, and
-    confirm `index.html` actually includes `view_engineering.html`.
+1. **Send real DB2 offsets for the 38 placeholder tags in `instruments`,
+   `sand_filter`, `cartridge_filters`, `feed_pump`, `hp_pump`, `tanks`, and
+   `global_management`** once those live-process values are added to the
+   PLC program. This is the single biggest remaining gap — until this is
+   done, the synoptic view's gauges, dots, and fill bars have nowhere to
+   read real data from, regardless of anything else in this document.
+2. **Resolve `entre_filtre_sable`'s real offset** and **rename/document
+   `unnamed_1997`/`unnamed_1998` in TIA** (Issue #10) before enabling any
+   of the three.
+3. **Add `write_dint`/`write_word` to `plc_service.py`** (Issue #11)
+   before marking any DINT/WORD setpoint as writable.
+4. **Update `vfd_comms.js` and `hmi-comms.js` for the renamed VFD routes**
+   (`/api/write` → `/api/vfd-write`, `/api/connect` → `/api/vfd-connect`)
+   — still outstanding from rev. 3, untouched this revision.
+5. **Fix the `/api/update-settings` naming mismatch** between
+   `view_engineering.html` and `vfd_routes.py` — still outstanding from
+   rev. 3.
+6. **Rename `/api/read` (GET) in `vfd_blueprint` to `/api/vfd-read`** —
+   still outstanding from rev. 3.
+7. **Remove the duplicate `/api/tags-config` registration from `app.py`**
+   — still outstanding from rev. 3.
+8. **Decide and build the HP-pump → VFD path (§4a)** — still outstanding.
+9. **Implement the missing Engineering Controls backend endpoints**
+   (`/api/engineering/calibration`, a real PLC comms config endpoint) —
+   still outstanding.
+10. **Resolve Issue #1 (duplicate alarm logic)** — delete `_evalAlarms`
+    from `hmi-app.js`, subscribe the on-screen log to `/api/alarms/status`
+    and `/api/alarms/log`. Worth doing now alongside a check of whether
+    `alarm_config.py`'s rules reference any tag names that no longer match
+    `tags_config.py` after the rev. 4 reorganization.
+11. **Add persistence (Issue #3), decide on authentication (Issue #5),
+    add WhatsApp retry/watchdog (Issue #2)** — all still outstanding,
+    unchanged priority from rev. 3.
+12. **Clean up navigation loose ends** (`view_dataview.html`,
+    `view_settings.html`, confirm `index.html`'s include) — still
+    outstanding.
