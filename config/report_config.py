@@ -111,9 +111,9 @@ DAILY_HOUR    = 7       # 07:00
 DAILY_MINUTE  = 0
 WEEKLY_DAY    = 0       # Monday
 
-# ── WhatsApp recipient ───────────────────────────────────────────────────────
-# Same format as alarm_config.py — international number without "+"
-REPORT_PHONE  = "21600000000"   # ← replace with the real recipient
+# ── WhatsApp recipients ──────────────────────────────────────────────────────
+# Reports are sent to the same list as alarm notifications.
+# Edit WHATSAPP_NUMBERS in modules/alarms/alarm_config.py — no change needed here.
 
 # ── History window ───────────────────────────────────────────────────────────
 # The telemetry buffer keeps at most this many samples per tag.

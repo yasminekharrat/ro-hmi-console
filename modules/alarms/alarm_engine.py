@@ -247,10 +247,18 @@ for lock_file in glob.glob(lock_pattern):
 
 
 def init_whatsapp_session(session_path: str | None = None):
-    """Launch Chrome + WhatsApp Web and block until authentication check passes."""
+    """
+    Launch Chrome + WhatsApp Web and block until authenticated.
+
+    Session is stored permanently in <project_root>/wa_session/ so it
+    survives reboots and app restarts without requiring a new QR scan.
+    On the first run (or if WhatsApp logs the session out), Chrome opens
+    visibly so you can scan the QR code.  On all subsequent startups the
+    window opens minimised and restores the saved session automatically.
+    """
     global _wa_driver, _wa_ready
 
-    import os, tempfile
+    import os
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
@@ -265,8 +273,15 @@ def init_whatsapp_session(session_path: str | None = None):
         return
 
     if session_path is None:
-        session_path = os.path.join(tempfile.gettempdir(), "thermeco_wa_session")
+        # Permanent folder inside the project root — survives reboots and
+        # Windows temp-folder cleanup.  Add wa_session/ to .gitignore.
+        project_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..")
+        )
+        session_path = os.path.join(project_root, "wa_session")
+
     os.makedirs(session_path, exist_ok=True)
+    print(f"[ALARM] WhatsApp session folder: {session_path}")
 
     opts = webdriver.ChromeOptions()
     opts.add_argument(f"--user-data-dir={session_path}")
@@ -274,20 +289,52 @@ def init_whatsapp_session(session_path: str | None = None):
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
+    opts.add_argument("--start-minimized")        # don't steal focus on startup
+    opts.add_argument("--disable-notifications")  # suppress Chrome permission popups
     opts.add_experimental_option("excludeSwitches", ["enable-logging"])
 
     try:
         _wa_driver = webdriver.Chrome(service=Service(driver_path), options=opts)
         _wa_driver.get("https://web.whatsapp.com")
-        print("[ALARM] WhatsApp Web opened — scan QR code in Chrome window (5 min timeout).")
+
+        # ── Fast path: session cookie still valid ──────────────────────────
+        # Give WhatsApp Web 15 s to restore the saved session before
+        # falling through to the full QR-scan wait.
+        try:
+            WebDriverWait(_wa_driver, 15).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, 'div[data-testid="chat-list"]')
+                )
+            )
+            _wa_ready = True
+            print("[ALARM] WhatsApp Web session restored from saved profile ✓  (no QR scan needed)")
+            _push_log("__system__", "WhatsApp Session", "INFO", None, "DISPATCHED",
+                      "Session restored from saved profile — no QR scan needed.")
+            return
+        except Exception:
+            pass  # not authenticated yet — fall through
+
+        # ── Slow path: need QR scan ────────────────────────────────────────
+        # Maximise the window so the QR code is easy to scan.
+        _wa_driver.maximize_window()
+        print("[ALARM] WhatsApp Web opened — scan the QR code in the Chrome window (5 min timeout).")
+        print("[ALARM] After scanning once the session is saved; future startups will be automatic.")
 
         WebDriverWait(_wa_driver, 300).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div[data-testid="chat-list"]'))
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, 'div[data-testid="chat-list"]')
+            )
         )
         _wa_ready = True
-        print("[ALARM] WhatsApp Web session ready ✓")
+        # Minimise again now that auth is done
+        try:
+            _wa_driver.minimize_window()
+        except Exception:
+            pass
+        print("[ALARM] WhatsApp Web authenticated ✓  Session saved — next startup will be automatic.")
         _push_log("__system__", "WhatsApp Session", "INFO", None, "DISPATCHED",
-                  "WhatsApp Web session authenticated successfully.")
+                  "WhatsApp authenticated. Session saved to wa_session/ — no QR needed next time.")
+
     except Exception as e:
         print(f"[ALARM] WhatsApp init failed: {e}")
         _wa_ready = False

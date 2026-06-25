@@ -1,11 +1,23 @@
+// Elapsed time formatter for alarm duration column
+function _fmtDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60)  return s + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60)  return m + 'm ' + (s % 60) + 's';
+    const h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+}
+
 class HmiApplicationCore {
     // ─── CLASS FIELDS ────────────────────────────────────────────────────────
     isConnected = false;
     tagConfig = [];
-    activeAlarms = {}; 
-    mockAlarmsList = []; 
+    activeAlarms = {};
+    acknowledgedAlarms = new Set();
+    mockAlarmsList = [];
     _scanInterval = null;
     _alarmInterval = null;
+    _durationInterval = null;
 
     // FIX: Declare your top-level functional tab matrix right here!
     tabs = ['synoptic', 'dataview', 'alarms', 'settings'];
@@ -36,6 +48,9 @@ class HmiApplicationCore {
 
         // Start dedicated alarm state sync loop at 1000ms
         this._alarmInterval = setInterval(() => this._fetchServerAlarms(), 1000);
+
+        // Lightweight duration-column refresh every 5s (no full re-render)
+        this._durationInterval = setInterval(() => this._refreshDurationCells(), 5000);
 
         // Set up Global handler for the Ack button inside the HTML component
         document.addEventListener('click', (e) => {
@@ -124,23 +139,30 @@ class HmiApplicationCore {
         let warningCount = 0;
 
         rules.forEach(rule => {
-            // Check state changes to log actions transitions natively in event grid
             const wasActive = !!this.activeAlarms[rule.id];
-            
+
             if (rule.active) {
                 if (!wasActive) {
                     HmiRenderer.appendEventLog(`ALARME ACTIVE: ${rule.label} (${rule.severity})`, "CRIT_ALM", rule.severity === 'CRITICAL');
-                    this.activeAlarms[rule.id] = { timestamp: rule.last_evaluated || new Date().toLocaleTimeString('fr-FR') };
+                    this.activeAlarms[rule.id] = {
+                        timestamp: rule.last_evaluated || new Date().toLocaleTimeString('fr-FR'),
+                        onset_ms: Date.now()
+                    };
                 }
 
                 currentAlarmsList.push({
-                    id: rule.id,
+                    id:        rule.id,
                     timestamp: this.activeAlarms[rule.id].timestamp,
-                    tag: rule.id.toUpperCase(),
-                    message: rule.label,
-                    value: rule.threshold !== null ? `Seuil: ${rule.threshold}` : "ACTIVE",
-                    unit: rule.unit || "",
-                    severity: rule.severity // "CRITICAL" | "WARNING"
+                    onset_ms:  this.activeAlarms[rule.id].onset_ms,
+                    tag:       rule.id.toUpperCase(),
+                    message:   rule.label,
+                    group:     rule.group  || '',
+                    icon:      rule.icon   || 'fa-solid fa-triangle-exclamation',
+                    threshold: rule.threshold,
+                    unit:      rule.unit   || '',
+                    whatsapp:  rule.whatsapp || false,
+                    severity:  rule.severity,
+                    acked:     this.acknowledgedAlarms.has(rule.id)
                 });
 
                 if (rule.severity === 'CRITICAL') criticalCount++;
@@ -149,6 +171,7 @@ class HmiApplicationCore {
                 if (wasActive) {
                     HmiRenderer.appendEventLog(`Résolu: ${rule.label} normalisé`, "SYS_NORM");
                     delete this.activeAlarms[rule.id];
+                    this.acknowledgedAlarms.delete(rule.id);
                 }
             }
         });
@@ -190,73 +213,127 @@ class HmiApplicationCore {
 
     // ─── UI RENDERING ────────────────────────────────────────────────────────
     renderAlarmPanelUI(alarms, criticals, warnings) {
-        const tbody = document.getElementById('alarm-table-body');
-        const emptyRow = document.getElementById('alarm-empty-row');
-        const countBadge = document.getElementById('alarm-count-badge');
-        const systemStatus = document.getElementById('alarm-system-status');
-        const critEl = document.getElementById('count-critical');
-        const warnEl = document.getElementById('count-warning');
+        const tbody       = document.getElementById('alarm-table-body');
+        const emptyRow    = document.getElementById('alarm-empty-row');
+        const countBadge  = document.getElementById('alarm-count-badge');
+        const statusText  = document.getElementById('alarm-system-status');
+        const statusDot   = document.getElementById('alarm-status-dot');
+        const critEl      = document.getElementById('count-critical');
+        const warnEl      = document.getElementById('count-warning');
+        const pollEl      = document.getElementById('alarm-poll-indicator');
 
         if (!tbody) return;
 
-        if (countBadge) countBadge.innerText = alarms.length;
+        if (countBadge) { countBadge.innerText = alarms.length + ' ACT.'; countBadge.classList.toggle('hidden', alarms.length === 0); }
         if (critEl) critEl.innerText = criticals;
         if (warnEl) warnEl.innerText = warnings;
+        if (pollEl) { pollEl.textContent = '● ACTIF'; pollEl.style.color = '#10b981'; }
 
-        // No active alarms
         if (alarms.length === 0) {
             if (emptyRow) emptyRow.style.display = '';
-            if (systemStatus) {
-                systemStatus.innerText = 'OK';
-                systemStatus.className = 'text-emerald-700 uppercase tracking-wide font-bold';
-            }
             tbody.innerHTML = '';
-            if (emptyRow) tbody.appendChild(emptyRow);
+            tbody.appendChild(emptyRow);
+            if (statusText) { statusText.textContent = 'NOMINAL'; statusText.className = 'text-emerald-700 uppercase tracking-wide font-bold plc-mono'; }
+            if (statusDot)  { statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 inline-block ml-1'; }
+            const icon = document.getElementById('alarm-title-icon');
+            if (icon) { icon.className = 'fa-solid fa-shield-check text-emerald-400 text-[11px]'; }
             return;
         }
 
-        // Active alarms exist
         if (emptyRow) emptyRow.style.display = 'none';
-        if (systemStatus) {
-            systemStatus.innerText = 'ALERTE INSTABLE';
-            systemStatus.className = 'text-[#FF0044] uppercase tracking-wide font-bold';
+        const hasCrit = criticals > 0;
+        if (statusText) {
+            statusText.textContent = hasCrit ? 'DÉFAUT CRITIQUE' : 'ALERTE';
+            statusText.className = hasCrit
+                ? 'text-[#FF0044] uppercase tracking-wide font-bold plc-mono animate-pulse'
+                : 'text-amber-500 uppercase tracking-wide font-bold plc-mono';
+        }
+        if (statusDot) {
+            statusDot.className = hasCrit
+                ? 'w-2 h-2 rounded-full bg-red-600 inline-block ml-1 animate-pulse'
+                : 'w-2 h-2 rounded-full bg-amber-500 inline-block ml-1';
+        }
+        const icon = document.getElementById('alarm-title-icon');
+        if (icon) {
+            icon.className = hasCrit
+                ? 'fa-solid fa-triangle-exclamation text-[#FF0044] text-[11px] animate-pulse'
+                : 'fa-solid fa-circle-exclamation text-amber-400 text-[11px]';
         }
 
+        const now = Date.now();
         let rowsHtml = '';
         alarms.forEach(alarm => {
-            const rowBg = alarm.severity === 'CRITICAL' ? 'bg-red-50 hover:bg-red-100/70' : 'bg-amber-50/60 hover:bg-amber-100/50';
-            const textColor = alarm.severity === 'CRITICAL' ? 'text-red-700' : 'text-amber-800';
-            const pulseColor = alarm.severity === 'CRITICAL' ? 'bg-red-600' : 'bg-amber-500';
-            
-            const statusButton = alarm.severity === 'CRITICAL' 
-                ? `<button onclick="HmiApp.acknowledgeSingleAlarm('${alarm.id}')" class="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-sm text-[8px] uppercase tracking-wide transition-all shadow-sm active:translate-y-px">CRIT [Ack]</button>` 
-                : `<button onclick="HmiApp.acknowledgeSingleAlarm('${alarm.id}')" class="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-sm text-[8px] uppercase tracking-wide transition-all shadow-sm active:translate-y-px">WARN [Ack]</button>`;
+            const isCrit  = alarm.severity === 'CRITICAL';
+            const isAcked = alarm.acked;
+
+            // Light-theme row colors matching the HMI design language
+            const rowCls  = isCrit
+                ? 'bg-red-50 hover:bg-red-100/70'
+                : 'bg-amber-50/60 hover:bg-amber-100/50';
+            const sevText = isCrit ? 'text-red-700' : 'text-amber-800';
+            const sevClr  = isCrit ? '#b91c1c' : '#92400e';
+            const dotCls  = isCrit
+                ? `w-2 h-2 rounded-full bg-red-600 mx-auto ${isAcked ? '' : 'animate-pulse'}`
+                : `w-2 h-2 rounded-full bg-amber-500 mx-auto ${isAcked ? '' : 'animate-pulse'}`;
+
+            const durStr  = alarm.onset_ms ? _fmtDuration(now - alarm.onset_ms) : '—';
+
+            const valStr  = alarm.threshold !== null && alarm.threshold !== undefined
+                ? `<span class="font-bold ${sevText}">${alarm.threshold}</span> <span class="text-[#8A9195] text-[8px]">${alarm.unit}</span>`
+                : `<span class="font-bold ${sevText}">ACTIVE</span>`;
+
+            const waIcon  = alarm.whatsapp
+                ? `<i class="fa-brands fa-whatsapp text-[#059669] text-[11px]"></i>`
+                : `<span class="text-[#C5CBD0]">—</span>`;
+
+            const ackBtn  = isAcked
+                ? `<span class="text-[8px] font-bold uppercase text-emerald-700 plc-mono">ACQ ✓</span>`
+                : (isCrit
+                    ? `<button onclick="HmiApp.acknowledgeSingleAlarm('${alarm.id}')" class="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-sm text-[8px] uppercase tracking-wide transition-all shadow-sm active:translate-y-px">ACQ</button>`
+                    : `<button onclick="HmiApp.acknowledgeSingleAlarm('${alarm.id}')" class="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-sm text-[8px] uppercase tracking-wide transition-all shadow-sm active:translate-y-px">ACQ</button>`);
 
             rowsHtml += `
-                <tr class="${rowBg} transition-colors border-b border-[#DFE4E6] text-[#111111]">
-                    <td class="p-2 border-r border-[#DFE4E6] text-[#52575A] whitespace-nowrap font-sans">${alarm.timestamp}</td>
-                    <td class="p-2 border-r border-[#DFE4E6] font-bold ${textColor}">${alarm.tag}</td>
-                    <td class="p-2 border-r border-[#DFE4E6] font-sans font-medium text-gray-800">
-                        <span class="inline-block w-1.5 h-1.5 rounded-full ${pulseColor} animate-pulse mr-2"></span>
-                        ${alarm.message}
+                <tr class="${rowCls} transition-colors border-b border-[#DFE4E6] text-[10px]">
+                    <td class="p-2 text-center border-r border-[#DFE4E6]"><div class="${dotCls}"></div></td>
+                    <td class="p-2 border-r border-[#DFE4E6] text-[#52575A] whitespace-nowrap plc-mono">${alarm.timestamp}</td>
+                    <td class="p-2 border-r border-[#DFE4E6] text-[#8A9195] whitespace-nowrap plc-mono" data-onset="${alarm.onset_ms || 0}">${durStr}</td>
+                    <td class="p-2 border-r border-[#DFE4E6] text-[#52575A] text-[9px] uppercase tracking-wide plc-mono">${alarm.group || '—'}</td>
+                    <td class="p-2 border-r border-[#DFE4E6]">
+                        <div class="flex items-center gap-1.5 ${sevText}">
+                            <i class="${alarm.icon} text-[9px]"></i>
+                            <span class="font-bold">${alarm.message}</span>
+                        </div>
                     </td>
-                    <td class="p-2 border-r border-[#DFE4E6] font-bold text-gray-700">${alarm.value} <span class="text-gray-400 font-normal text-[8px]">${alarm.unit}</span></td>
-                    <td class="p-2 text-center">${statusButton}</td>
-                </tr>
-            `;
+                    <td class="p-2 border-r border-[#DFE4E6] plc-mono whitespace-nowrap">${valStr}</td>
+                    <td class="p-2 border-r border-[#DFE4E6] text-center">${waIcon}</td>
+                    <td class="p-2 text-center">${ackBtn}</td>
+                </tr>`;
         });
 
         tbody.innerHTML = rowsHtml;
-        if (emptyRow) tbody.appendChild(emptyRow);
+    }
+
+    // Update only the duration cells — avoids a full re-render on every tick
+    _refreshDurationCells() {
+        const now = Date.now();
+        document.querySelectorAll('#alarm-table-body td[data-onset]').forEach(td => {
+            const onset = parseInt(td.dataset.onset, 10);
+            if (onset > 0) td.textContent = _fmtDuration(now - onset);
+        });
     }
 
     // ─── PLC ACTIONS ─────────────────────────────────────────────────────────
     acknowledgeSingleAlarm(id) {
-        if (typeof HmiRenderer !== 'undefined') HmiRenderer.appendEventLog(`Alarm manually acknowledged: [${id}]`, "SYS_ACK");
+        this.acknowledgedAlarms.add(id);
+        if (typeof HmiRenderer !== 'undefined') HmiRenderer.appendEventLog(`Acquitté: [${id}]`, "SYS_ACK");
+        // Re-render immediately so ACQ button becomes ✓
+        this._fetchServerAlarms();
     }
 
     acknowledgeAllAlarms() {
-        if (typeof HmiRenderer !== 'undefined') HmiRenderer.appendEventLog("Global clear issued: Acquitting all active system registers.", "SYS_ACK");
+        Object.keys(this.activeAlarms).forEach(id => this.acknowledgedAlarms.add(id));
+        if (typeof HmiRenderer !== 'undefined') HmiRenderer.appendEventLog("Acquittement global: toutes les alarmes actives.", "SYS_ACK");
+        this._fetchServerAlarms();
     }
 
     async triggerWrite(db, offset, value) {
@@ -308,3 +385,5 @@ class HmiApplicationCore {
 // ─── INSTANTIATION ───────────────────────────────────────────────────────────
 const HmiApp = new HmiApplicationCore();
 document.addEventListener("DOMContentLoaded", () => HmiApp.init());
+
+// SynopticHMI is defined as window.SynopticHMI in synoptic.js (loaded before this file).

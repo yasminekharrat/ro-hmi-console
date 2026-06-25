@@ -390,34 +390,73 @@
 #detail-panel {
     position: fixed; top: 0; right: -420px;
     width: 420px; height: 100vh;
-    background: #DFE4E6;
-    border-left: 2px solid #7F8C8D;
+    background: #F0F2F3;
+    border-left: 2px solid #52575A;
     z-index: 1000;
-    transition: right 0.25s ease;
+    transition: right 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex; flex-direction: column;
     overflow: hidden;
-    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    box-shadow: -4px 0 20px rgba(0,0,0,0.35);
 }
 #detail-panel.open { right: 0; }
+
 .panel-header {
-    background: #BAC3C7; color: #000;
-    padding: 12px 16px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 2px solid #7F8C8D;
+    background: linear-gradient(180deg, #2E3438 0%, #3A4044 100%);
+    color: #DFE4E6;
+    border-bottom: 2px solid #009999;
     flex-shrink: 0;
 }
-.panel-body { flex: 1; overflow-y: auto; padding: 16px; }
-.panel-body::-webkit-scrollbar { width: 12px; }
-.panel-body::-webkit-scrollbar-track { background: #BAC3C7; border-left: 1px solid #96A0A5; }
-.panel-body::-webkit-scrollbar-thumb { background: #C2CBD0; border: 2px solid #BAC3C7; box-shadow: 1px 1px 0 #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }
+.panel-header > div:first-child {
+    padding: 13px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.panel-header .close-btn {
+    background: #4A5257;
+    border: 1px solid #52575A;
+    color: #DFE4E6;
+    border-radius: 2px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.panel-header .close-btn:hover { background: #5A6267; }
 
-.param-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 4px; background: #fff; border: 1px solid #7F8C8D; border-radius: 2px; box-shadow: inset 1px 1px 2px rgba(0,0,0,0.1); }
-.param-name { font-size: 10px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.param-value { font-family: 'Roboto Mono', monospace; font-size: 13px; font-weight: 700; color: #000; }
-.param-unit { font-size: 9px; color: #475569; margin-left: 3px; }
-.param-value.bool-true  { color: #000; font-weight: 900; }
-.param-value.bool-false { color: #7F8C8D; }
-.section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #7F8C8D; }
+.panel-body {
+    flex: 1; overflow-y: auto; padding: 14px;
+    background: #F0F2F3;
+}
+.panel-body::-webkit-scrollbar { width: 10px; }
+.panel-body::-webkit-scrollbar-track { background: #DFE4E6; }
+.panel-body::-webkit-scrollbar-thumb { background: #96A0A5; border: 2px solid #DFE4E6; border-radius: 5px; }
+
+.param-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 12px; margin-bottom: 3px;
+    background: #fff;
+    border: 1px solid #C5CBD0;
+    border-left: 3px solid #8A9195;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.param-row:hover { background: #F8FAFB; border-left-color: #009999; }
+.param-name { font-size: 9.5px; color: #52575A; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.param-value { font-family: 'Roboto Mono', monospace; font-size: 13px; font-weight: 700; color: #1a1a1a; }
+.param-unit { font-size: 9px; color: #7A8A90; margin-left: 3px; }
+.param-value.pressure  { color: #0E7490; }
+.param-value.flow      { color: #047857; }
+.param-value.cond      { color: #B45309; }
+.param-value.level     { color: #1D4ED8; }
+.param-value.bool-true  { color: #059669; font-weight: 900; }
+.param-value.bool-false { color: #DC2626; font-weight: 700; }
+.section-title {
+    font-size: 8.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: #3E4245;
+    margin: 14px 0 6px; padding: 4px 8px;
+    background: #DFE4E6; border-left: 3px solid #009999;
+    border-radius: 1px;
+}
 
 /* ─── MODALS ────────────────────────────────────────────── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900; display: none; align-items: center; justify-content: center; }
@@ -430,19 +469,7 @@
 .log-row-err  { background: #7F8C8D; color: #fff; font-weight: 700; }
 .log-row-warn { background: #BAC3C7; color: #000; font-weight: 700; }
 
-/* ─── FORCE VFD TO OVERRIDE THE CANVAS OVERLAY ─── */
-/* ─── WORKSPACE LAYOUT FIX FOR VFD CONSOLE ─── */
-/* ─── WORKSPACE LAYOUT FIX FOR VFD CONSOLE ─── */
+/* ─── VFD INLINE CONSOLE OVERLAY ─────────────────────────── */
 #view-vfd:not(.hidden) {
-    display: block !important;
-    position: absolute !important;
-    /* Pins it over the canvas workspace while leaving room for standard sidebar layouts on the left */
-    top: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: auto !important; /* Prevents it from crushing the left sidebar */
-    width: calc(100% - 240px) !important; /* Adjust 240px to match your sidebar's exact width if needed */
-    height: 100% !important;
-    z-index: 9999 !important; /* Keeps it strictly above the SVG pipe lines */
-    background-color: #1a1f29 !important;
+    display: flex !important;
 }

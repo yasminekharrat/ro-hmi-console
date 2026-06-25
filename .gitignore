@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+venv/
+env/
+
+# WhatsApp session — contains personal Chrome profile/cookies, never commit
+wa_session/
+
+# Generated reports
+reports_output/
+
+# Engineering settings persisted at runtime
+config/engineering_settings.json
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db

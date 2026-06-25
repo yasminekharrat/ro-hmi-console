@@ -188,7 +188,7 @@ ALARM_RULES = [
 WHATSAPP_NUMBERS = [
     "+21698760727",
  #   "+21698760700",
-    "+21693760724",
+    # perfect it worked just the gestionnaire de fichier in ouvrir is still open it didnt close on it s own and it s till saying generation des fichiers "+21693760724",
 ]
 
 # ── POLLING INTERVAL ──────────────────────────────────────────────────────────

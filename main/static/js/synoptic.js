@@ -108,8 +108,9 @@ class SynopticController {
                     }
                 ],
                 actions: [
-                    { label: "MARCHE HP", onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', true)",  color: "green" },
-                    { label: "ARRÊT HP",  onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', false)", color: "red"   },
+                    { label: "MARCHE HP",     onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', true)",  color: "green"  },
+                    { label: "ARRÊT HP",      onclick: "HmiApp.triggerWriteByTag('hp_pump-cmd', false)", color: "red"    },
+                    { label: "⚙ Tab VFD AC10", onclick: "SynopticHMI.closePanel(); SynopticHMI.showView('vfd');",         color: "blue"   },
                 ]
             },
             tanks: {
@@ -165,7 +166,9 @@ class SynopticController {
         // ── KPI Strip ─────────────────────────────────────────────
         const isAuto = bool('global_management-auto');
         const isManual = bool('global_management-manual');
-        setText('kpi-mode',         isAuto ? 'AUTO' : (isManual ? 'MANUEL' : '---'));
+        const modeText = isAuto ? 'AUTO' : (isManual ? 'MANUEL' : '---');
+        setText('kpi-mode',           modeText);
+        setText('kpi-mode-strip-wrap', modeText);
         setText('kpi-flow-permeat', fmt(num('instruments-flow_permeat')));
         setText('kpi-cond',         fmt(num('instruments-cond_permeat'), 1));
         setText('kpi-p-hp',         fmt(num('instruments-p_hp_pump_out')));
@@ -249,6 +252,14 @@ class SynopticController {
         setText('syn-val-cond-permeat', fmt(num('instruments-cond_permeat'), 1) + '<span class="syn-unit">µS/cm</span>');
         setText('syn-val-cond-mix',     fmt(num('instruments-cond_mix'), 1)     + '<span class="syn-unit">µS/cm</span>');
 
+        // ── ELECTROVALVES (sand filter inlet / outlet) ────────────
+        const vIn  = bool('sand_filter-valve_in');
+        const vOut = bool('sand_filter-valve_out');
+        this._updateValve('ev-in-fs1',  vIn);
+        this._updateValve('ev-in-fs2',  vIn);
+        this._updateValve('ev-out-fs1', vOut);
+        this._updateValve('ev-out-fs2', vOut);
+
         // ── PANEL UPDATE (if open) ─────────────────────────────────
         if (this._panelOpen && this._currentPanelComp) {
             this._refreshPanelValues();
@@ -288,6 +299,13 @@ class SynopticController {
         bar.style.width = `${pct}%`;
         bar.classList.toggle('warn', pct > 60 && pct <= 85);
         bar.classList.toggle('crit', pct > 85);
+    }
+
+    _updateValve(id, isOpen) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('fill', isOpen ? '#059669' : '#dc2626');
+        el.setAttribute('stroke', isOpen ? '#064E3B' : '#7F1D1D');
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -375,16 +393,41 @@ class SynopticController {
     }
 
     // ──────────────────────────────────────────────────────────────
+    // VFD INLINE VIEW (within the synoptic tab)
+    // ──────────────────────────────────────────────────────────────
+    openVfd() {
+        const canvas = document.getElementById('synoptic-canvas');
+        const vfd    = document.getElementById('view-vfd');
+        if (canvas) canvas.classList.add('hidden');
+        if (vfd)    vfd.classList.remove('hidden');
+        // Update tab button states
+        const btnVfd = document.getElementById('btn-tab-vfd');
+        const btnSyn = document.getElementById('btn-synoptic');
+        if (btnVfd) { btnVfd.classList.add('tab-active');   btnVfd.classList.remove('tab-inactive'); }
+        if (btnSyn) { btnSyn.classList.add('tab-inactive'); btnSyn.classList.remove('tab-active');   }
+    }
+
+    closeVfd() {
+        const canvas = document.getElementById('synoptic-canvas');
+        const vfd    = document.getElementById('view-vfd');
+        if (vfd)    vfd.classList.add('hidden');
+        if (canvas) canvas.classList.remove('hidden');
+        // Restore synoptic tab active state
+        const btnVfd = document.getElementById('btn-tab-vfd');
+        const btnSyn = document.getElementById('btn-synoptic');
+        if (btnSyn) { btnSyn.classList.add('tab-active');   btnSyn.classList.remove('tab-inactive'); }
+        if (btnVfd) { btnVfd.classList.add('tab-inactive'); btnVfd.classList.remove('tab-active');   }
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // TAB SWITCHING
     // ──────────────────────────────────────────────────────────────
     showView(view) {
-        // 1. We added 'alarms' to the array
-        ['synoptic', 'dataview', 'settings', 'alarms','engineering'].forEach(v => {
+        if (view === 'vfd') { this.openVfd(); return; }
+
+        ['synoptic', 'dataview', 'settings', 'alarms', 'engineering', 'diagnostics'].forEach(v => {
             const el = document.getElementById(`view-${v}`);
-            
-            // 2. We check for both ID naming conventions so it matches 'btn-tab-alarms'
             const btn = document.getElementById(`btn-${v}`) || document.getElementById(`btn-tab-${v}`);
-            
             if (el) el.classList.toggle('hidden', v !== view);
             if (btn) {
                 btn.classList.toggle('tab-active',   v === view);
@@ -441,4 +484,4 @@ class SynopticController {
     }
 }
 
-const SynopticHMI = new SynopticController();
+window.SynopticHMI = new SynopticController();

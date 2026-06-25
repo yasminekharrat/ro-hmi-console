@@ -28,295 +28,251 @@
        /api/connect conventions so the backend side should be a thin
        wrapper, not a redesign.
    ══════════════════════════════════════════════════════════════════════ #}
+<main id="view-engineering" class="hidden w-full flex-grow flex flex-col overflow-y-auto bg-[#DFE4E6] src-view-component">
 
-<main id="view-engineering" class="hidden w-full flex-grow flex-col overflow-y-auto bg-[#DFE4E6] src-view-component">
-
-    <div class="flex items-center justify-between px-4 py-2 bg-[#BAC3C7] border-b border-[#7F8C8D] sticky top-0 z-10">
-        <div class="flex items-center gap-2">
-            <i class="fa-solid fa-gears text-amber-700"></i>
-            <span class="text-xs font-bold uppercase tracking-wider text-[#334155]">Engineering Controls — Zone Restreinte</span>
+    <div class="flex items-center justify-between px-4 py-3 bg-[#BAC3C7] border-b-2 border-[#7F8C8D] sticky top-0 z-10 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-[#334155] p-1.5 rounded flex items-center justify-center">
+                <i class="fa-solid fa-gears text-amber-500 text-sm"></i>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-sm font-black uppercase tracking-widest text-[#334155] leading-none">Engineering Controls</span>
+                <span class="text-[10px] font-bold text-red-700 uppercase tracking-wider mt-0.5">Zone Restreinte — Admin Only</span>
+            </div>
         </div>
-        <div id="eng-save-status" class="text-[10px] font-mono text-[#475569]">—</div>
+        <div class="flex flex-col items-end">
+            <span class="text-[9px] font-bold uppercase text-[#475569]">Dernière Sauvegarde</span>
+            <div id="eng-save-status" class="text-[11px] font-mono font-bold text-[#334155]">—</div>
+        </div>
     </div>
 
-    <div class="p-4 flex flex-col gap-5 max-w-4xl mx-auto w-full">
+    <div class="p-4 md:p-6 flex flex-col gap-6 max-w-7xl mx-auto w-full">
 
-        <!-- ═══════════════════════════════════════════════════════════
-             SECTION 1 — CALIBRATION OFFSETS
-             ═══════════════════════════════════════════════════════════ -->
-        <section class="syn-box" style="padding:0; overflow:hidden;">
-            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
-                <span class="section-title" style="margin:0; border-bottom:none;">Offsets d'Étalonnage</span>
-                <span class="text-[9px] text-[#475569] font-mono">tags_config.py — PLC_TAGS</span>
+        <section class="bg-white border border-[#7F8C8D] rounded shadow-sm overflow-hidden flex flex-col">
+            <div class="px-4 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-[#334155]"></i>
+                    <h2 class="text-sm font-bold text-[#334155] uppercase tracking-wide m-0">Offsets d'Étalonnage (Zero)</h2>
+                </div>
+                <span class="text-[10px] bg-[#DFE4E6] border border-[#7F8C8D] px-2 py-0.5 rounded text-[#475569] font-mono shadow-inner">tags_config.py — PLC_TAGS</span>
             </div>
 
-            <div class="p-3 grid grid-cols-1 md:grid-cols-2 gap-3" id="eng-calib-grid">
-
-                {# Instrumentation — pressures #}
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_in_filter — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_in_filter"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_out_filter — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_out_filter"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_out_5u — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_out_5u"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_out_1u — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_out_1u"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_hp_pump_out — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_hp_pump_out"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_reject — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_reject"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-p_permeat — Offset (Bar)</span>
-                    <input type="number" step="0.01" id="calib-instruments-p_permeat"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                {# Flow #}
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-flow_permeat — Offset (m³/h)</span>
-                    <input type="number" step="0.01" id="calib-instruments-flow_permeat"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-flow_concentrat — Offset (m³/h)</span>
-                    <input type="number" step="0.01" id="calib-instruments-flow_concentrat"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.00" placeholder="0.00">
-                </div>
-
-                {# Conductivity #}
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-cond_permeat — Offset (µS/cm)</span>
-                    <input type="number" step="0.1" id="calib-instruments-cond_permeat"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.0" placeholder="0.0">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">instruments-cond_mix — Offset (µS/cm)</span>
-                    <input type="number" step="0.1" id="calib-instruments-cond_mix"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.0" placeholder="0.0">
-                </div>
-
-                {# Sand filter backwash threshold (already a real tag: sand_filter-dp_max) #}
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">sand_filter-dp_max — Seuil ΔP Contre-Lavage (Bar)</span>
-                    <input type="number" step="0.01" id="calib-sand_filter-dp_max"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0.50" placeholder="0.50">
-                </div>
-
-                {# HP pump max pressure trip (already a real tag: hp_pump-p_max) #}
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">hp_pump-p_max — Seuil P Max Admissible (Bar)</span>
-                    <input type="number" step="0.1" id="calib-hp_pump-p_max"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="16.0" placeholder="16.0">
-                </div>
-            </div>
-
-            <div class="px-3 pb-3 flex justify-end gap-2">
-                <button onclick="EngineeringPanel.resetCalibration()"
-                        class="wincc-btn" style="background:#C2CBD0; width:auto; padding:5px 14px;">
-                    Réinitialiser
-                </button>
-                <button onclick="EngineeringPanel.saveCalibration()"
-                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
-                    Enregistrer Étalonnage
-                </button>
-            </div>
-        </section>
-
-        <!-- ═══════════════════════════════════════════════════════════
-             SECTION 2 — PLC COMMS CONFIG (IP / SLOT)
-             ═══════════════════════════════════════════════════════════ -->
-        <section class="syn-box" style="padding:0; overflow:hidden;">
-            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
-                <span class="section-title" style="margin:0; border-bottom:none;">Configuration Communication PLC</span>
-                <span class="text-[9px] text-[#475569] font-mono">routes/telemetry.py — /api/connect</span>
-            </div>
-
-            <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Adresse IP (ip)</span>
-                    <input type="text" id="plc-ip" inputmode="decimal"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="192.168.1.10" placeholder="192.168.1.10">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Rack</span>
-                    <input type="number" id="plc-rack" min="0" max="7"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="0" placeholder="0">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Slot</span>
-                    <input type="number" id="plc-slot" min="0" max="31"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="1" placeholder="1">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Cycle de Scrutation (ms)</span>
-                    <input type="number" id="plc-poll-interval" min="100" step="50"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="500" placeholder="500">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Timeout Connexion (ms)</span>
-                    <input type="number" id="plc-timeout" min="500" step="100"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="2000" placeholder="2000">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">État Connexion</span>
-                    <div class="flex items-center gap-2 px-2 py-1">
-                        <span id="plc-status-dot" class="syn-status-dot off"></span>
-                        <span id="plc-status-text" class="font-mono text-xs text-[#475569]">Déconnecté</span>
+            <div class="p-4 bg-[#DFE4E6] grid grid-cols-1 lg:grid-cols-3 gap-4" id="eng-calib-grid">
+                
+                <div class="bg-[#BAC3C7] border border-[#7F8C8D] rounded p-3 flex flex-col gap-3 lg:col-span-2 shadow-sm">
+                    <span class="text-xs font-bold text-[#334155] uppercase border-b border-[#7F8C8D] pb-1 mb-1">Capteurs de Pression (Bar)</span>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_IN_FILTER</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_in_filter" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_OUT_FILTER</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_out_filter" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_OUT_5µ</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_out_5u" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_OUT_1µ</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_out_1u" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_HP_PUMP_OUT</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_hp_pump_out" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_REJECT</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_reject" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-[#475569]">P_PERMEAT</label>
+                            <input type="number" step="0.01" id="calib-instruments-p_permeat" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155] focus:ring-1 focus:ring-[#334155]" value="0.00">
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="px-3 pb-3 flex justify-end gap-2">
-                <button onclick="EngineeringPanel.testPlcConnection()"
-                        class="wincc-btn" style="background:#1D4ED8; border-color:#1E3A8A; color:#fff; width:auto; padding:5px 14px;">
-                    Tester Connexion
-                </button>
-                <button onclick="EngineeringPanel.savePlcConfig()"
-                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
-                    Enregistrer
-                </button>
-            </div>
-        </section>
+                <div class="flex flex-col gap-4">
+                    <div class="bg-[#BAC3C7] border border-[#7F8C8D] rounded p-3 flex flex-col gap-3 shadow-sm">
+                        <span class="text-xs font-bold text-[#334155] uppercase border-b border-[#7F8C8D] pb-1">Débit & Conductivité</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">FLOW_PERM (m³/h)</label>
+                                <input type="number" step="0.01" id="calib-instruments-flow_permeat" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="0.00">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">FLOW_CONC (m³/h)</label>
+                                <input type="number" step="0.01" id="calib-instruments-flow_concentrat" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="0.00">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">COND_PERM (µS)</label>
+                                <input type="number" step="0.1" id="calib-instruments-cond_permeat" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="0.0">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">COND_MIX (µS)</label>
+                                <input type="number" step="0.1" id="calib-instruments-cond_mix" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="0.0">
+                            </div>
+                        </div>
+                    </div>
 
-        <!-- ═══════════════════════════════════════════════════════════
-             SECTION 3 — VFD CONNECTION SETTINGS
-             ═══════════════════════════════════════════════════════════ -->
-        <section class="syn-box" style="padding:0; overflow:hidden;">
-            <div class="px-3 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
-                <span class="section-title" style="margin:0; border-bottom:none;">Configuration Liaison VFD (Veichi AC10)</span>
-                <span class="text-[9px] text-[#475569] font-mono">modules/vfd/vfd_routes.py — /api/connect</span>
-            </div>
-
-            <div class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Port Série (port)</span>
-                    <input type="text" id="vfd-port"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="COM3" placeholder="COM3">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Vitesse (baud_rate)</span>
-                    <select id="vfd-baud-rate"
-                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
-                        <option value="9600">9600</option>
-                        <option value="19200" selected>19200</option>
-                        <option value="38400">38400</option>
-                        <option value="57600">57600</option>
-                        <option value="115200">115200</option>
-                    </select>
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Adresse Esclave (slave_address)</span>
-                    <input type="number" id="vfd-slave-address" min="1" max="247"
-                           class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white"
-                           value="1" placeholder="1">
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Parité</span>
-                    <select id="vfd-parity"
-                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
-                        <option value="N" selected>Aucune (N)</option>
-                        <option value="E">Paire (E)</option>
-                        <option value="O">Impaire (O)</option>
-                    </select>
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Bits de Données</span>
-                    <select id="vfd-data-bits"
-                            class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white">
-                        <option value="8" selected>8</option>
-                        <option value="7">7</option>
-                    </select>
-                </div>
-
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">État Liaison</span>
-                    <div class="flex items-center gap-2 px-2 py-1">
-                        <span id="vfd-status-dot" class="syn-status-dot off"></span>
-                        <span id="vfd-status-text" class="font-mono text-xs text-[#475569]">Hors Ligne</span>
+                    <div class="bg-[#C2CBD0] border-2 border-red-800/30 rounded p-3 flex flex-col gap-3 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-8 h-8 bg-red-800/10 flex items-center justify-center rounded-bl-full"><i class="fa-solid fa-triangle-exclamation text-red-800 text-[10px] mr-2 mb-2"></i></div>
+                        <span class="text-xs font-bold text-red-900 uppercase border-b border-red-800/30 pb-1">Seuils Critiques Système</span>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">FILTRE_SABLE ΔP (Bar)</label>
+                                <input type="number" step="0.01" id="calib-sand_filter-dp_max" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-red-800" value="0.50">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-[#475569]">HP_PUMP P_MAX (Bar)</label>
+                                <input type="number" step="0.1" id="calib-hp_pump-p_max" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-red-800" value="16.0">
+                            </div>
+                        </div>
                     </div>
                 </div>
+
             </div>
 
-            <div class="px-3 pb-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Compteur TX (_tx_count)</span>
-                    <span id="vfd-tx-count" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
-                </div>
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Compteur RX (_rx_count)</span>
-                    <span id="vfd-rx-count" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
-                </div>
-                <div class="param-row" style="flex-direction:column; align-items:stretch; gap:4px;">
-                    <span class="param-name">Erreurs CRC (_crc_errors)</span>
-                    <span id="vfd-crc-errors" class="font-mono text-sm text-[#475569] px-2 py-1">—</span>
-                </div>
-            </div>
-
-            <div class="px-3 pb-3 flex justify-end gap-2">
-                <button onclick="EngineeringPanel.testVfdConnection()"
-                        class="wincc-btn" style="background:#1D4ED8; border-color:#1E3A8A; color:#fff; width:auto; padding:5px 14px;">
-                    Tester Liaison
+            <div class="px-4 py-3 bg-white border-t border-[#7F8C8D] flex justify-end gap-3">
+                <button onclick="EngineeringPanel.resetCalibration()" class="text-xs font-bold text-[#475569] bg-[#DFE4E6] hover:bg-[#BAC3C7] border border-[#7F8C8D] rounded px-4 py-1.5 transition-colors shadow-sm">
+                    <i class="fa-solid fa-rotate-left mr-1"></i> Réinitialiser
                 </button>
-                <button onclick="EngineeringPanel.saveVfdConfig()"
-                        class="wincc-btn text-white font-bold" style="background:#065F46; border-color:#064E3B; width:auto; padding:5px 14px;">
-                    Enregistrer
+                <button onclick="EngineeringPanel.saveCalibration()" class="text-xs font-bold text-white bg-[#065F46] hover:bg-[#044E3B] border border-[#064E3B] rounded px-5 py-1.5 transition-colors shadow-sm">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i> Enregistrer Étalonnage
                 </button>
             </div>
         </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <section class="bg-white border border-[#7F8C8D] rounded shadow-sm overflow-hidden flex flex-col">
+                <div class="px-4 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-network-wired text-[#334155]"></i>
+                        <h2 class="text-sm font-bold text-[#334155] uppercase tracking-wide m-0">S7 PLC Link</h2>
+                    </div>
+                    <span class="text-[10px] text-[#475569] font-mono">/api/connect</span>
+                </div>
+
+                <div class="p-4 grid grid-cols-2 gap-x-4 gap-y-3 bg-[#DFE4E6] flex-grow">
+                    <div class="flex flex-col gap-1 col-span-2">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Adresse IP (IPv4)</label>
+                        <input type="text" id="plc-ip" inputmode="decimal" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="192.168.1.10">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Rack</label>
+                        <input type="number" id="plc-rack" min="0" max="7" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="0">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Slot</label>
+                        <input type="number" id="plc-slot" min="0" max="31" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="1">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Scrutation (ms)</label>
+                        <input type="number" id="plc-poll-interval" min="100" step="50" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="500">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Timeout (ms)</label>
+                        <input type="number" id="plc-timeout" min="500" step="100" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="2000">
+                    </div>
+                </div>
+
+                <div class="px-4 py-3 bg-white border-t border-[#7F8C8D] flex items-center justify-between">
+                    <div class="flex items-center gap-2 px-2 py-1 bg-[#DFE4E6] border border-[#BAC3C7] rounded-sm">
+                        <span id="plc-status-dot" class="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.8)]"></span>
+                        <span id="plc-status-text" class="font-mono text-[10px] font-bold text-[#475569] uppercase">Déconnecté</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="EngineeringPanel.testPlcConnection()" class="text-[11px] font-bold text-white bg-[#1D4ED8] hover:bg-[#1E40AF] border border-[#1E3A8A] rounded px-3 py-1 transition-colors shadow-sm">
+                            Tester
+                        </button>
+                        <button onclick="EngineeringPanel.savePlcConfig()" class="text-[11px] font-bold text-white bg-[#065F46] hover:bg-[#044E3B] border border-[#064E3B] rounded px-3 py-1 transition-colors shadow-sm">
+                            Sauver
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-white border border-[#7F8C8D] rounded shadow-sm overflow-hidden flex flex-col">
+                <div class="px-4 py-2 bg-[#C2CBD0] border-b border-[#7F8C8D] flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-brands fa-usb text-[#334155]"></i>
+                        <h2 class="text-sm font-bold text-[#334155] uppercase tracking-wide m-0">Veichi VFD (RTU)</h2>
+                    </div>
+                    <span class="text-[10px] text-[#475569] font-mono">vfd_routes.py</span>
+                </div>
+
+                <div class="p-4 grid grid-cols-2 gap-x-4 gap-y-3 bg-[#DFE4E6] flex-grow">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Port Série</label>
+                        <input type="text" id="vfd-port" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="COM3">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Adresse Esclave</label>
+                        <input type="number" id="vfd-slave-address" min="1" max="247" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]" value="1">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] font-bold text-[#475569] uppercase">Baud Rate</label>
+                        <select id="vfd-baud-rate" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]">
+                            <option value="9600">9600</option>
+                            <option value="19200" selected>19200</option>
+                            <option value="38400">38400</option>
+                            <option value="57600">57600</option>
+                            <option value="115200">115200</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="flex flex-col gap-1 w-1/2">
+                            <label class="text-[10px] font-bold text-[#475569] uppercase">Data</label>
+                            <select id="vfd-data-bits" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]">
+                                <option value="8" selected>8</option>
+                                <option value="7">7</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1 w-1/2">
+                            <label class="text-[10px] font-bold text-[#475569] uppercase">Parité</label>
+                            <select id="vfd-parity" class="font-mono text-sm border border-[#7F8C8D] rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-[#334155]">
+                                <option value="N" selected>N</option>
+                                <option value="E">E</option>
+                                <option value="O">O</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-span-2 mt-1 grid grid-cols-3 gap-2 border-t border-[#BAC3C7] pt-3">
+                        <div class="bg-white border border-[#BAC3C7] rounded px-2 py-1 flex justify-between items-center shadow-inner">
+                            <span class="text-[9px] font-bold text-[#7F8C8D]">TX</span>
+                            <span id="vfd-tx-count" class="font-mono text-[10px] font-bold text-[#334155]">0</span>
+                        </div>
+                        <div class="bg-white border border-[#BAC3C7] rounded px-2 py-1 flex justify-between items-center shadow-inner">
+                            <span class="text-[9px] font-bold text-[#7F8C8D]">RX</span>
+                            <span id="vfd-rx-count" class="font-mono text-[10px] font-bold text-[#334155]">0</span>
+                        </div>
+                        <div class="bg-white border border-[#BAC3C7] rounded px-2 py-1 flex justify-between items-center shadow-inner">
+                            <span class="text-[9px] font-bold text-[#7F8C8D]">CRC</span>
+                            <span id="vfd-crc-errors" class="font-mono text-[10px] font-bold text-red-700">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-4 py-3 bg-white border-t border-[#7F8C8D] flex items-center justify-between">
+                    <div class="flex items-center gap-2 px-2 py-1 bg-[#DFE4E6] border border-[#BAC3C7] rounded-sm">
+                        <span id="vfd-status-dot" class="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.8)]"></span>
+                        <span id="vfd-status-text" class="font-mono text-[10px] font-bold text-[#475569] uppercase">Hors Ligne</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="EngineeringPanel.testVfdConnection()" class="text-[11px] font-bold text-white bg-[#1D4ED8] hover:bg-[#1E40AF] border border-[#1E3A8A] rounded px-3 py-1 transition-colors shadow-sm">
+                            Tester
+                        </button>
+                        <button onclick="EngineeringPanel.saveVfdConfig()" class="text-[11px] font-bold text-white bg-[#065F46] hover:bg-[#044E3B] border border-[#064E3B] rounded px-3 py-1 transition-colors shadow-sm">
+                            Sauver
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </div>
 
     </div>
 </main>

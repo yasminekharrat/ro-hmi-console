@@ -1,0 +1,322 @@
+{# main/templates/components/view_diagnostics.html #}
+{# Bound to id="view-diagnostics" — switched by SynopticHMI.showView('diagnostics') #}
+
+{% macro diag_card(label, tag_id, db_address, unit) %}
+<div class="bg-[#F8FAFC] border-2 border-[#7F8C8D] shadow-sm rounded-sm flex flex-col"
+     data-diagnostic-group="instruments-{{ tag_id }}">
+
+    <div class="bg-[#BAC3C7] border-b border-[#7F8C8D] px-3 py-1.5 flex items-center justify-between">
+        <span class="font-bold text-slate-900 uppercase tracking-tight">{{ label }}</span>
+        {% if db_address %}
+            <span class="text-xs px-2 py-0.5 bg-blue-500 border border-blue-600 text-white rounded-sm font-sans font-semibold">
+                {{ db_address }}
+            </span>
+        {% else %}
+            <span class="text-xs px-2 py-0.5 bg-slate-500 border border-slate-600 text-white rounded-sm font-sans font-semibold">
+                Awaiting Address
+            </span>
+        {% endif %}
+    </div>
+
+    <div class="p-3 grid grid-cols-1 sm:grid-cols-12 gap-3 flex-grow">
+
+        <div class="sm:col-span-5 bg-slate-900 text-green-400 p-2 border border-slate-700 rounded-sm flex flex-col justify-between shadow-inner">
+            <div class="text-center border-b border-slate-700 pb-1 mb-2">
+                <span class="text-[10px] text-slate-400 block uppercase font-sans">Valeur Actuelle</span>
+                <div class="text-2xl font-bold tracking-tight">
+                    <span data-metric="current">{{ "--" if not db_address else "0.00" }}</span>
+                    <span class="text-xs text-slate-400">{{ unit }}</span>
+                </div>
+            </div>
+            <div class="space-y-1 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Moyenne:</span>
+                    <span data-metric="avg" class="font-bold text-slate-200">{{ "--" if not db_address else "0.00 " + unit }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Maximum:</span>
+                    <span data-metric="max" class="font-bold text-red-400">{{ "--" if not db_address else "0.00 " + unit }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Minimum:</span>
+                    <span data-metric="min" class="font-bold text-blue-400">{{ "--" if not db_address else "0.00 " + unit }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Écart-Type:</span>
+                    <span data-metric="stddev" class="font-bold text-amber-400">{{ "--" if not db_address else "0.00" }}</span>
+                </div>
+                <div class="flex justify-between items-center border-t border-slate-800 pt-1 mt-1">
+                    <span class="text-slate-400">Tendance:</span>
+                    <span data-metric="trend"
+                          class="font-bold px-1 rounded-sm text-[11px] font-sans {{ 'bg-slate-800 text-slate-400' if not db_address }}">
+                        {{ "INCONNUE" if not db_address else "STABLE" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sm:col-span-7 bg-white border border-[#A2AEC2] p-1.5 rounded-sm flex items-center justify-center min-h-[140px] shadow-sm">
+            <canvas id="chart-{{ tag_id }}" class="w-full h-full"></canvas>
+        </div>
+
+    </div>
+</div>
+{% endmacro %}
+
+<div class="p-4 bg-[#E2E8F0] min-h-full text-slate-800 font-mono text-sm">
+
+    {# ── CONTROL BAR ──────────────────────────────────────────────────────────── #}
+    <div class="bg-[#BAC3C7] border border-[#7F8C8D] p-3 mb-4 flex flex-wrap items-center justify-between gap-4 shadow-sm rounded-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 text-white p-2 rounded-sm border border-blue-700 shadow-inner">
+                <i class="fa-solid fa-chart-line text-lg"></i>
+            </div>
+            <div>
+                <h2 class="text-base font-bold uppercase tracking-wide text-slate-900">Analyse Graphique &amp; Diagnostics</h2>
+                <p class="text-xs text-slate-600 font-sans">Calcul statistique glissant en temps réel basé sur le tampon d'historique PLC.</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-700 uppercase">Fenêtre d'analyse :</span>
+            <select id="diag-window-selector"
+                    class="bg-white border border-[#7F8C8D] rounded-sm px-2 py-1 text-xs font-bold shadow-inner focus:outline-none focus:border-blue-500 cursor-pointer">
+                <option value="10">10 Dernières Minutes</option>
+                <option value="30" selected>30 Dernières Minutes</option>
+                <option value="60">1 Heure Glissante</option>
+                <option value="360">6 Heures Glissantes</option>
+            </select>
+            <div class="flex items-center gap-1.5 ml-2 px-2 py-1 bg-slate-200 border border-slate-400 rounded-sm text-xs text-slate-600 font-sans">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                Calcul Live
+            </div>
+        </div>
+    </div>
+
+    {# ── DIAGNOSTIC CARDS ─────────────────────────────────────────────────────── #}
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {{ diag_card("Pression Entrée Filtre (p_in_filter)",   "p_in_filter",   "DB2.DBD222 (REAL)", "bar")  }}
+        {{ diag_card("Pression Sortie Filtre (p_out_filter)",  "p_out_filter",  "",                  "bar")  }}
+        {{ diag_card("Débit de Perméat (flow_permeat)",        "flow_permeat",  "",                  "m³/h") }}
+        {{ diag_card("Conductivité Perméat (cond_permeat)",    "cond_permeat",  "",                  "µS/cm")}}
+    </div>
+
+    {# ── REPORTS PANEL ────────────────────────────────────────────────────────── #}
+    <div class="mt-6 bg-[#F8FAFC] border-2 border-[#7F8C8D] shadow-sm rounded-sm">
+
+        {# Header #}
+        <div class="bg-[#BAC3C7] border-b border-[#7F8C8D] px-3 py-2 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="bg-emerald-600 text-white px-2 py-1 rounded-sm border border-emerald-700 shadow-inner">
+                    <i class="fa-solid fa-file-excel text-sm"></i>
+                </div>
+                <span class="font-bold text-slate-900 uppercase tracking-tight">Rapports Automatiques — Bilan Excel</span>
+            </div>
+            <button onclick="DiagReports.refresh()"
+                    class="wincc-btn text-xs px-3 py-1 border border-[#7F8C8D] rounded-sm flex items-center gap-1.5 hover:bg-slate-200">
+                <i class="fa-solid fa-rotate-right"></i> Rafraîchir
+            </button>
+        </div>
+
+        <div class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+            {# ── Left: engine status ─────────────────────────────────────────── #}
+            <div class="flex flex-col gap-3">
+                <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 border-b border-slate-300 pb-1">Statut du Moteur</h3>
+
+                <div class="bg-slate-900 text-green-400 p-3 rounded-sm border border-slate-700 font-mono text-xs space-y-1.5 shadow-inner">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Moteur :</span>
+                        <span id="rpt-engine-status" class="font-bold px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Dernier journalier :</span>
+                        <span id="rpt-last-daily" class="text-slate-200">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Dernier hebdomadaire :</span>
+                        <span id="rpt-last-weekly" class="text-slate-200">—</span>
+                    </div>
+                    <div class="flex justify-between border-t border-slate-700 pt-1.5 mt-1">
+                        <span class="text-slate-400">Prochain journalier :</span>
+                        <span id="rpt-next-daily" class="text-cyan-400">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Prochain hebdomadaire :</span>
+                        <span id="rpt-next-weekly" class="text-cyan-400">—</span>
+                    </div>
+                    <div class="flex justify-between border-t border-slate-700 pt-1.5 mt-1">
+                        <span class="text-slate-400">Destinataires WA :</span>
+                        <span id="rpt-recipients" class="text-amber-400 text-right max-w-[55%] break-words">—</span>
+                    </div>
+                </div>
+
+                {# Result box #}
+                <div id="rpt-result-box" class="hidden bg-slate-800 border border-slate-600 rounded-sm p-3 font-mono text-xs">
+                    <div class="text-slate-400 uppercase text-[10px] mb-1 tracking-widest">Résultat dernière action</div>
+                    <div id="rpt-result-text" class="text-green-400 break-words whitespace-pre-wrap"></div>
+                </div>
+            </div>
+
+            {# ── Right: actions + file list ──────────────────────────────────── #}
+            <div class="flex flex-col gap-3">
+                <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 border-b border-slate-300 pb-1">Actions Manuelles</h3>
+
+                <div class="flex flex-col gap-2">
+                    <button id="btn-trigger-daily" onclick="DiagReports.triggerDaily()"
+                            class="wincc-btn w-full flex items-center justify-center gap-2 px-4 py-2.5
+                                   bg-blue-600 hover:bg-blue-700 text-white border border-blue-700
+                                   rounded-sm font-bold text-xs uppercase tracking-wider shadow transition-colors">
+                        <i class="fa-solid fa-calendar-day"></i>
+                        Déclencher Bilan Journalier
+                    </button>
+                    <button id="btn-trigger-weekly" onclick="DiagReports.triggerWeekly()"
+                            class="wincc-btn w-full flex items-center justify-center gap-2 px-4 py-2.5
+                                   bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700
+                                   rounded-sm font-bold text-xs uppercase tracking-wider shadow transition-colors">
+                        <i class="fa-solid fa-calendar-week"></i>
+                        Déclencher Bilan Hebdomadaire
+                    </button>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 border-b border-slate-300 pb-1 mb-2">Fichiers Générés</h3>
+                    <div id="rpt-file-list" class="space-y-1 max-h-48 overflow-y-auto">
+                        <p class="text-xs text-slate-400 font-sans italic">Chargement…</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+const DiagReports = {
+    _setBusy(btnId, busy, label) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.disabled = busy;
+        if (busy) {
+            if (!btn.dataset.orig) btn.dataset.orig = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${label || 'En cours…'}`;
+        } else {
+            btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+            delete btn.dataset.orig;
+        }
+    },
+
+    _showResult(ok, text) {
+        const box  = document.getElementById('rpt-result-box');
+        const span = document.getElementById('rpt-result-text');
+        box.classList.remove('hidden');
+        span.className = ok ? 'text-green-400 break-words whitespace-pre-wrap'
+                            : 'text-red-400 break-words whitespace-pre-wrap';
+        span.textContent = text;
+    },
+
+    async loadStatus() {
+        try {
+            const r = await fetch('/api/reports/status');
+            const d = await r.json();
+
+            const engineEl = document.getElementById('rpt-engine-status');
+            if (d.status === 'not_started') {
+                engineEl.textContent = 'NON DÉMARRÉ';
+                engineEl.className = 'font-bold px-2 py-0.5 rounded-sm bg-red-800 text-red-200';
+            } else {
+                engineEl.textContent = 'ACTIF';
+                engineEl.className = 'font-bold px-2 py-0.5 rounded-sm bg-green-800 text-green-300';
+            }
+
+            document.getElementById('rpt-last-daily').textContent   = d.last_daily_run  || '—';
+            document.getElementById('rpt-last-weekly').textContent  = d.last_weekly_run || '—';
+            document.getElementById('rpt-next-daily').textContent   = d.next_daily      || '—';
+            document.getElementById('rpt-next-weekly').textContent  = d.next_weekly     || '—';
+            document.getElementById('rpt-recipients').textContent   =
+                Array.isArray(d.recipients) ? d.recipients.join(', ') : (d.recipients || '—');
+        } catch (e) {
+            document.getElementById('rpt-engine-status').textContent = 'ERREUR';
+        }
+    },
+
+    async loadFileList() {
+        const container = document.getElementById('rpt-file-list');
+        try {
+            const r = await fetch('/api/reports/list');
+            const d = await r.json();
+            if (!d.files || d.files.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 font-sans italic">Aucun fichier généré.</p>';
+                return;
+            }
+            container.innerHTML = d.files.map(f => `
+                <a href="/api/reports/download/${encodeURIComponent(f)}"
+                   download="${f}"
+                   class="flex items-center gap-2 px-2 py-1.5 bg-white border border-slate-300
+                          rounded-sm text-xs font-mono hover:bg-emerald-50 hover:border-emerald-400
+                          transition-colors text-slate-700">
+                    <i class="fa-solid fa-file-excel text-emerald-600 shrink-0"></i>
+                    <span class="truncate">${f}</span>
+                    <i class="fa-solid fa-download text-slate-400 ml-auto shrink-0"></i>
+                </a>`).join('');
+        } catch (e) {
+            container.innerHTML = '<p class="text-xs text-red-400 font-sans">Erreur chargement fichiers.</p>';
+        }
+    },
+
+    refresh() {
+        this.loadStatus();
+        this.loadFileList();
+    },
+
+    async _trigger(period, btnId) {
+        this._setBusy(btnId, true, 'Génération Excel…');
+        const ctrl    = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 120_000); // 2-min hard limit
+        // Update label text once WhatsApp send phase starts (~5 s in)
+        const labelTimer = setTimeout(
+            () => this._setBusy(btnId, true, 'Envoi WhatsApp…'), 5000
+        );
+        try {
+            const r  = await fetch(`/api/reports/trigger-${period}`,
+                                   { method: 'POST', signal: ctrl.signal });
+            const d  = await r.json();
+            const ok = d.status === 'ok';
+            let  txt = d.message || JSON.stringify(d);
+            if (ok && d.wa) txt += `\nWhatsApp: ${d.wa}`;
+            this._showResult(ok, txt);
+            if (ok) this.loadFileList();
+        } catch (e) {
+            const msg = e.name === 'AbortError'
+                ? 'Délai dépassé (2 min) — vérifiez le terminal Flask.'
+                : `Erreur réseau: ${e.message}`;
+            this._showResult(false, msg);
+        } finally {
+            clearTimeout(timeout);
+            clearTimeout(labelTimer);
+            this._setBusy(btnId, false);
+        }
+    },
+
+    triggerDaily()  { this._trigger('daily',  'btn-trigger-daily');  },
+    triggerWeekly() { this._trigger('weekly', 'btn-trigger-weekly'); },
+};
+
+// Auto-load when the diagnostics tab becomes visible
+document.addEventListener('DOMContentLoaded', () => {
+    const view = document.getElementById('view-diagnostics');
+    if (!view) return;
+    const obs = new MutationObserver(mutations => {
+        for (const m of mutations) {
+            if (m.attributeName === 'class' && !view.classList.contains('hidden')) {
+                DiagReports.refresh();
+            }
+        }
+    });
+    obs.observe(view, { attributes: true });
+});
+</script>

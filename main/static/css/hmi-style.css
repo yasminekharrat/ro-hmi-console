@@ -1,21 +1,19 @@
-/* static/css/hmi-style.css
-
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
 body { font-family: 'Tahoma', 'Arial', sans-serif; -webkit-font-smoothing: antialiased; }
 .plc-mono { font-family: 'Roboto Mono', monospace; }
 .hmi-screen-inset { box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.35); }
 
-/* WinCC Classic 3D Bevel Styles 
+/* WinCC Classic 3D Bevel Styles */
 .wincc-btn { box-shadow: 1px 1px 0px #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }
 .wincc-btn:active { box-shadow: -1px -1px 0px #fff inset, 1px 1px 1px rgba(0,0,0,0.4) inset; }
 .wincc-input { box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3); }
 .wincc-panel { border: 1px solid #7F8C8D; box-shadow: 1px 1px 2px rgba(255,255,255,0.6) inset, -1px -1px 2px rgba(0,0,0,0.15) inset; }
 
-/* Navigation Tab States 
-.tab-active { background-color: #DFE4E6; border-bottom-color: #DFE4E6; font-weight: bold; color: #000; z-index: 10; }
+/* Navigation Tab States */
+.tab-active   { background-color: #DFE4E6; border-bottom-color: #DFE4E6; font-weight: bold; color: #000; z-index: 10; }
 .tab-inactive { background-color: #BAC3C7; border-bottom-color: #7F8C8D; color: #475569; }
 
-/* Custom Scrollbar 
-.wincc-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+/* Custom Scrollbar */
+.wincc-scrollbar::-webkit-scrollbar       { width: 12px; height: 12px; }
 .wincc-scrollbar::-webkit-scrollbar-track { background: #BAC3C7; border-left: 1px solid #96A0A5; }
-.wincc-scrollbar::-webkit-scrollbar-thumb { background: #C2CBD0; border: 2px solid #BAC3C7; box-shadow: 1px 1px 0px #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; } */
+.wincc-scrollbar::-webkit-scrollbar-thumb { background: #C2CBD0; border: 2px solid #BAC3C7; box-shadow: 1px 1px 0px #fff inset, -1px -1px 1px rgba(0,0,0,0.4) inset; }

@@ -37,6 +37,7 @@ if str(root_path) not in sys.path:
 
 from main.services.plc_service import plc_service
 from main.services.telemetry_reader import read_all_tags, write_tag_by_id
+from main.services import telemetry_history as hist
 from config.tags_config import PLC_TAGS
 
 telemetry_bp = Blueprint('telemetry', __name__)
@@ -150,6 +151,7 @@ def get_bulk_telemetry():
         return jsonify({"status": "error", "message": "PLC offline"}), 503
 
     telemetry_data = read_all_tags(PLC_TAGS)
+    hist.record_batch(telemetry_data)
     return jsonify(telemetry_data)
 
 

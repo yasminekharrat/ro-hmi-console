@@ -2,10 +2,12 @@
 <div id="detail-panel">
     <div class="panel-header">
         <div>
-            <div id="dp-title" class="text-sm font-bold uppercase tracking-wider">Component Detail</div>
-            <div id="dp-subtitle" class="text-[10px] text-[#A9B3B8] mt-0.5 plc-mono">Select a component</div>
+            <div>
+                <div id="dp-title" class="text-sm font-bold uppercase tracking-wider text-[#DFE4E6]">Détail Composant</div>
+                <div id="dp-subtitle" class="text-[9px] text-[#7A9AA5] mt-0.5 plc-mono">Sélectionner un composant</div>
+            </div>
+            <button onclick="SynopticHMI.closePanel()" class="close-btn">✕ FERMER</button>
         </div>
-        <button onclick="SynopticHMI.closePanel()" class="wincc-btn bg-[#5A646A] hover:bg-[#68737A] px-3 py-1 text-xs font-bold border border-[#2F3437] text-white">✕ CLOSE</button>
     </div>
     <div id="dp-body" class="panel-body wincc-scrollbar"></div>
 </div>

@@ -1,59 +1,53 @@
 <div id="view-alarms" class="hidden flex-grow flex flex-col p-2 gap-2 h-full src-view-component animate-fade-in">
-    
-    <div class="flex-1 bg-white border border-[#8A9195] rounded-sm shadow-sm flex flex-col overflow-hidden">
-        
-        <div class="bg-[#3E4245] px-2.5 py-1.5 flex items-center justify-between border-b border-[#1C2022]">
+
+    <div class="bg-white border border-[#8A9195] rounded-sm shadow-sm flex flex-col overflow-hidden">
+
+        <!-- ── TITLE BAR ──────────────────────────────────────────────────── -->
+        <div class="bg-[#3E4245] px-2.5 py-1.5 flex items-center justify-between border-b border-[#1C2022] shrink-0">
             <div class="flex items-center gap-2 select-none">
-                <i class="fa-solid fa-triangle-exclamation text-[#FF0044] text-[11px] animate-pulse"></i>
+                <i id="alarm-title-icon" class="fa-solid fa-shield-check text-emerald-400 text-[11px]"></i>
                 <span class="text-[10px] text-white font-bold uppercase tracking-wider plc-mono">Journal des Alarmes Actives</span>
-                <span id="alarm-count-badge" class="bg-[#FF0044] text-white text-[9px] font-bold px-2 py-0.2 rounded-sm border border-[#21020A]">0</span>
+                <span id="alarm-count-badge" class="hidden bg-[#FF0044] text-white text-[9px] font-bold px-2 py-0.5 rounded-sm border border-[#21020A]">0</span>
             </div>
-            <div>
-                <button id="btn-ack-all" 
-                        onclick="HmiApp.acknowledgeAllAlarms()"
-                        class="bg-[#DFE4E6] hover:bg-[#C5CBD0] border border-[#52575A] text-[9px] text-[#111111] font-bold px-2 py-0.5 rounded-sm transition-colors uppercase tracking-wide shadow-sm active:translate-y-px">
+            <div class="flex items-center gap-3">
+                <!-- severity counters -->
+                <div class="flex items-center gap-2 text-[9px] select-none">
+                    <span class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-red-600 inline-block"></span>
+                        <span class="text-[#FCA5A5] plc-mono">CRIT: <span id="count-critical" class="font-bold text-white">0</span></span>
+                    </span>
+                    <span class="text-[#52575A]">|</span>
+                    <span class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                        <span class="text-[#FCD34D] plc-mono">WARN: <span id="count-warning" class="font-bold text-white">0</span></span>
+                    </span>
+                </div>
+                <button id="btn-ack-all" onclick="HmiApp.acknowledgeAllAlarms()"
+                        class="bg-[#DFE4E6] hover:bg-[#C5CBD0] border border-[#52575A] text-[9px] text-[#111111] font-bold px-2 py-0.5 rounded-sm transition-colors uppercase tracking-wide shadow-sm active:translate-y-px select-none">
                     <i class="fa-solid fa-check-double mr-1 text-emerald-700"></i> Acquitter Tout
                 </button>
             </div>
         </div>
 
-        <div class="bg-[#10141b] border-b border-[#212a36] px-2.5 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-1.5 text-[9px] font-bold text-[#f0a93e] uppercase tracking-wider select-none">
-                <i class="fa-brands fa-whatsapp text-[#2bbf7a] text-sm"></i> Test Dispatch WhatsApp:
-            </div>
-            <div class="flex gap-2">
-                <button onclick="dispatchWhatsAppAlarm('hp_overpressure', this)"
-                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#dc2626] border border-[#dc2626] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
-                    <span>🚨</span> Surpression HP
-                </button>
-                
-                <button onclick="dispatchWhatsAppAlarm('hp_pump_fault', this)"
-                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#d97706] border border-[#d97706] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
-                    <span>⚡</span> Défaut Pompe HP
-                </button>
-                
-                <button onclick="dispatchWhatsAppAlarm('cond_high', this)"
-                        class="bg-[#161b24] hover:bg-[#1f2633] text-[#059669] border border-[#059669] text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
-                    <span>💧</span> Conductivité Perméat
-                </button>
-            </div>
-        </div>
-
-        <div class="flex-1 overflow-y-auto max-h-[340px] text-[10px] plc-mono">
-            <table class="w-full text-left border-collapse">
+        <!-- ── ACTIVE ALARMS TABLE ─────────────────────────────────────────── -->
+        <div class="overflow-y-auto" style="max-height:220px;">
+            <table class="w-full text-left border-collapse text-[10px]">
                 <thead>
                     <tr class="bg-[#C5CBD0] text-[#111111] uppercase font-bold text-[9px] sticky top-0 border-b border-[#8A9195] z-10 select-none">
-                        <th class="p-2 border-r border-[#8A9195] w-[15%]">Horodatage</th>
-                        <th class="p-2 border-r border-[#8A9195] w-[15%]">ID Tag PLC</th>
-                        <th class="p-2 border-r border-[#8A9195] w-[45%]">Désignation du Défaut</th>
-                        <th class="p-2 border-r border-[#8A9195] w-[13%]">Valeur</th>
-                        <th class="p-2 text-center w-[12%]">Statut</th>
+                        <th class="p-2 w-[22px] text-center border-r border-[#8A9195]"></th>
+                        <th class="p-2 w-[14%] border-r border-[#8A9195]">Horodatage</th>
+                        <th class="p-2 w-[8%] border-r border-[#8A9195]">Durée</th>
+                        <th class="p-2 w-[11%] border-r border-[#8A9195]">Groupe</th>
+                        <th class="p-2 border-r border-[#8A9195]">Description Défaut</th>
+                        <th class="p-2 w-[13%] border-r border-[#8A9195]">Valeur / Seuil</th>
+                        <th class="p-2 w-[6%] text-center border-r border-[#8A9195]">WA</th>
+                        <th class="p-2 w-[9%] text-center">Statut</th>
                     </tr>
                 </thead>
                 <tbody id="alarm-table-body" class="divide-y divide-[#DFE4E6]">
                     <tr id="alarm-empty-row">
-                        <td colspan="5" class="p-8 text-center text-[#52575A] italic bg-[#F4F6F7] select-none">
-                            <i class="fa-solid fa-circle-check text-emerald-600 mr-1.5 text-sm"></i> 
+                        <td colspan="8" class="p-8 text-center text-[#52575A] italic bg-[#F4F6F7] select-none">
+                            <i class="fa-solid fa-circle-check text-emerald-600 mr-1.5 text-sm"></i>
                             Aucune alarme active. L'installation fonctionne en mode nominal.
                         </td>
                     </tr>
@@ -61,72 +55,186 @@
             </table>
         </div>
 
-        <div class="bg-[#DFE4E6] px-3 py-1 flex justify-between items-center text-[9px] text-[#3E4245] font-bold border-t border-[#8A9195] select-none">
+        <!-- ── EVENT LOG ───────────────────────────────────────────────────── -->
+        <div class="bg-[#C5CBD0] px-2.5 py-1 flex items-center justify-between border-t border-b border-[#8A9195] shrink-0 select-none">
             <div class="flex items-center gap-1.5">
-                <span>Statut HMI:</span>
-                <span id="alarm-system-status" class="text-emerald-700 uppercase tracking-wide font-bold">OK</span>
+                <i class="fa-solid fa-clock-rotate-left text-[#52575A] text-[9px]"></i>
+                <span class="text-[9px] font-bold uppercase tracking-wider text-[#111111] plc-mono">Historique Événements</span>
             </div>
-            <div class="flex gap-4 uppercase tracking-wider text-[8px]">
-                <span>Critique: <span id="count-critical" class="text-red-600 font-bold">0</span></span>
-                <span>Alerte: <span id="count-warning" class="text-amber-600 font-bold">0</span></span>
+            <button onclick="AlarmPanel.loadLog()"
+                    class="text-[9px] text-[#52575A] hover:text-[#111111] transition-colors">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+        <div class="overflow-y-auto bg-[#F4F6F7]" style="max-height:110px;">
+            <table class="w-full border-collapse text-[9px] plc-mono">
+                <tbody id="alarm-log-body">
+                    <tr><td class="px-3 py-3 text-center italic text-[#8A9195]">Chargement du journal...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ── WHATSAPP TEST DISPATCH ──────────────────────────────────────── -->
+        <div class="bg-[#10141b] border-t border-[#1C2022] px-2.5 py-2 flex flex-wrap items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 text-[9px] shrink-0 select-none">
+                <i class="fa-brands fa-whatsapp text-[#2bbf7a] text-sm"></i>
+                <span class="font-bold text-[#f0a93e] uppercase tracking-wider plc-mono">Test Dispatch:</span>
+                <span id="wa-ready-indicator" class="flex items-center gap-1 text-[8px] font-bold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block"></span>
+                    <span class="text-amber-400">—</span>
+                </span>
+            </div>
+            <div id="wa-test-buttons" class="flex flex-wrap gap-1.5">
+                <span class="text-[8px] italic text-[#52575A]">Chargement règles...</span>
             </div>
         </div>
-        
+
+        <!-- ── FOOTER STATUS BAR ───────────────────────────────────────────── -->
+        <div class="bg-[#DFE4E6] px-3 py-1 flex justify-between items-center text-[9px] text-[#3E4245] font-bold border-t border-[#8A9195] shrink-0 select-none">
+            <div class="flex items-center gap-1.5">
+                <span>Statut système:</span>
+                <span id="alarm-system-status" class="text-emerald-700 uppercase tracking-wide font-bold plc-mono">NOMINAL</span>
+                <span id="alarm-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 inline-block ml-1"></span>
+            </div>
+            <div class="flex gap-3 uppercase tracking-wider text-[8px] plc-mono">
+                <span>Sonde: <span id="alarm-poll-indicator" class="text-emerald-700">ACTIF</span></span>
+                <span class="text-[#8A9195]">RO SKID 01</span>
+            </div>
+        </div>
+
     </div>
 </div>
 
 <script>
-    async function dispatchWhatsAppAlarm(ruleId, btn) {
-        // 1. Vérification de l'état du moteur d'alarme via le Blueprint
+const AlarmPanel = (() => {
+    let _waReady = false;
+
+    function init() {
+        checkWaStatus();
+        loadLog();
+        loadTestButtons();
+        setInterval(() => {
+            if (!document.getElementById('view-alarms')?.classList.contains('hidden')) {
+                loadLog();
+                checkWaStatus();
+            }
+        }, 10000);
+    }
+
+    async function checkWaStatus() {
         try {
-            const statusRes = await fetch('/api/alarms/status');
-            if (!statusRes.ok) throw new Error("Status endpoint communication failure");
-            
-            const statusData = await statusRes.json();
-            if (!statusData.wa_ready) {
-                alert("Erreur: WhatsApp n'est pas prêt. Scannez d'abord le code QR.");
+            const r = await fetch('/api/alarms/wa-status');
+            const d = await r.json();
+            _waReady = d.ready;
+            const el = document.getElementById('wa-ready-indicator');
+            if (!el) return;
+            if (_waReady) {
+                el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#10b981;box-shadow:0 0 4px #10b981;"></span><span class="text-[#2bbf7a]">CONNECTÉ</span>`;
+            } else {
+                el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block"></span><span class="text-amber-400">EN ATTENTE QR</span>`;
+            }
+        } catch (_) {}
+    }
+
+    async function loadLog() {
+        const tbody = document.getElementById('alarm-log-body');
+        if (!tbody) return;
+        try {
+            const r = await fetch('/api/alarms/log?limit=30');
+            const d = await r.json();
+            const entries = d.log || [];
+            if (!entries.length) {
+                tbody.innerHTML = `<tr><td class="px-3 py-3 text-center italic text-[#8A9195]">Journal vide.</td></tr>`;
                 return;
             }
-        } catch (e) {
-            alert("Erreur: Impossible de joindre le serveur local.");
-            console.error("HMI Status Check Exception:", e);
+            const S = {
+                'ACTIVE':        { bg:'#FEE2E2', color:'#991B1B', label:'ACTIF'   },
+                'RESOLVED':      { bg:'#D1FAE5', color:'#065F46', label:'RÉSOLU'  },
+                'DISPATCHED':    { bg:'#DCFCE7', color:'#166534', label:'WA OK'   },
+                'DISPATCH_FAIL': { bg:'#FEF3C7', color:'#92400E', label:'WA ERR'  },
+                'TEST':          { bg:'#DBEAFE', color:'#1E40AF', label:'TEST'    },
+                'EVAL_FAIL':     { bg:'#F3F4F6', color:'#6B7280', label:'N/A'     },
+            };
+            tbody.innerHTML = entries.map(e => {
+                const s = S[e.status] || { bg:'#F3F4F6', color:'#6B7280', label: e.status };
+                const valStr = (e.value !== null && e.value !== undefined) ? String(e.value).substring(0,10) : '';
+                return `<tr class="border-b border-[#DFE4E6] hover:bg-[#EEF0F2] transition-colors">
+                    <td class="px-2 py-1 text-[#52575A] whitespace-nowrap w-[90px]">${e.date || ''} ${e.time}</td>
+                    <td class="px-1.5 py-1 w-[55px]">
+                        <span class="px-1.5 py-0.5 rounded-sm text-[7px] font-bold uppercase" style="background:${s.bg};color:${s.color};">${s.label}</span>
+                    </td>
+                    <td class="px-2 py-1 text-[#3E4245] font-medium">${e.label}</td>
+                    <td class="px-2 py-1 text-right text-[#8A9195] whitespace-nowrap">${valStr} ${e.unit || ''}</td>
+                </tr>`;
+            }).join('');
+        } catch (_) {
+            tbody.innerHTML = `<tr><td class="px-3 py-3 text-center italic text-red-500">Erreur chargement journal.</td></tr>`;
+        }
+    }
+
+    async function loadTestButtons() {
+        const container = document.getElementById('wa-test-buttons');
+        if (!container) return;
+        try {
+            const r = await fetch('/api/alarms/config');
+            const d = await r.json();
+            const waRules = (d.rules || []).filter(rule => rule.whatsapp);
+            if (!waRules.length) {
+                container.innerHTML = `<span class="text-[8px] italic text-[#52575A]">Aucune règle WA configurée.</span>`;
+                return;
+            }
+            const SEV = {
+                'CRITICAL': 'text-[#dc2626] border-[#dc2626] hover:bg-[#1f1215]',
+                'WARNING':  'text-[#d97706] border-[#d97706] hover:bg-[#1f1508]',
+                'INFO':     'text-[#60a5fa] border-[#3b82f6] hover:bg-[#0a1228]',
+            };
+            container.innerHTML = waRules.map(rule => {
+                const cls = SEV[rule.severity] || SEV['INFO'];
+                const shortLabel = rule.label.replace(/^[^—–\-]*[—–\-]\s*/, '');
+                return `<button onclick="AlarmPanel.dispatchTest('${rule.id}', this)"
+                    class="bg-[#161b24] ${cls} border text-[9px] font-bold px-3 py-1 rounded-sm shadow-sm transition-all active:scale-95 uppercase tracking-wide flex items-center gap-1.5">
+                    <i class="${rule.icon || 'fa-solid fa-triangle-exclamation'} text-[9px]"></i>
+                    ${shortLabel}
+                </button>`;
+            }).join('');
+        } catch (_) {
+            container.innerHTML = `<span class="text-[8px] italic text-red-400">Erreur chargement config.</span>`;
+        }
+    }
+
+    async function dispatchTest(ruleId, btn) {
+        if (!_waReady) {
+            alert("WhatsApp non prêt. Scannez le QR code dans le panneau Chrome.");
             return;
         }
-
-        // 2. Verrouillage de l'interface utilisateur (Spinner)
-        const originalContent = btn.innerHTML;
+        const orig = btn.innerHTML;
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Envoi...`;
-
-        // 3. Routage précis vers l'API de test du Blueprint avec l'ID configuré
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[9px]"></i> Envoi...`;
         try {
             const res = await fetch(`/api/alarms/test/${ruleId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            
             const data = await res.json();
-            
             if (!res.ok) {
-                console.error("Dispatch Failed:", data.msg);
-                alert("Échec de l'envoi: " + (data.msg || "Engine error"));
-            } else {
-                console.log("Dispatch Success:", data.msg);
-                if (typeof HmiRenderer !== 'undefined') {
-                    HmiRenderer.appendEventLog(`Test WhatsApp envoyé pour l'id: [${ruleId}]`, "WA_SENT");
-                }
+                console.error("WA dispatch failed:", data.msg);
+            } else if (typeof HmiRenderer !== 'undefined') {
+                HmiRenderer.appendEventLog(`Test WA envoyé: [${ruleId}]`, "WA_SENT");
             }
         } catch (e) {
-            alert("Erreur serveur : le dispatch WhatsApp a échoué.");
-            console.error("Transmission exception:", e);
+            console.error("WA dispatch exception:", e);
         } finally {
-            // 4. Libération du bouton après temporisation de sécurité (4s)
             setTimeout(() => {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = originalContent;
+                btn.innerHTML = orig;
             }, 4000);
         }
     }
+
+    return { init, loadLog, checkWaStatus, dispatchTest };
+})();
+
+document.addEventListener('DOMContentLoaded', () => AlarmPanel.init());
 </script>

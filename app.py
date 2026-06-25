@@ -14,6 +14,8 @@ from routes.telemetry import telemetry_bp
 from routes.engineering import engineering_bp  # <-- Integrated engineering blueprint
 from modules.vfd.vfd_routes import vfd_blueprint
 from modules.alarms.alarm_routes import alarm_blueprint
+from modules.reports.reports_routes import report_bp
+from modules.diagnostics.diagnostics_routes import diagnostics_bp
 from config.tags_config import PLC_TAGS
 
 # ── APP INIT ──────────────────────────────────────────────────────────────────
@@ -40,6 +42,8 @@ app.register_blueprint(telemetry_bp)
 app.register_blueprint(engineering_bp)      # Registered engineering blueprint
 app.register_blueprint(vfd_blueprint)       # URL prefix configured internally (/vfd)
 app.register_blueprint(alarm_blueprint)     # URL prefix configured internally (/api/alarms)
+app.register_blueprint(report_bp)           # /api/reports
+app.register_blueprint(diagnostics_bp)      # /api/diagnostics
 
 # ── ROUTES ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +90,12 @@ if __name__ == "__main__":
 
         # WhatsApp Web auto-launch on startup:
         threading.Thread(target=alarm_engine.init_whatsapp_session, daemon=True).start()
+
+        from modules.reports.report_engine import ReportEngine
+        from modules.reports.reports_routes import set_engine
+        _report_engine = ReportEngine()
+        set_engine(_report_engine)
+        _report_engine.start()
 
     # Issue #4: read debug flag from environment. Never hardcode True in production.
     debug_mode = os.environ.get("DEBUG", "0").strip().lower() in ("1", "true")
